@@ -135,3 +135,197 @@ body {
   }
 }
 
+/* adding new */
+
+
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: #f4f7fb;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 32px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  box-shadow: 0 12px 36px rgba(15, 23, 42, 0.08);
+}
+
+.login-card h1 {
+  margin: 0;
+  color: #2563eb;
+}
+
+.login-card > p {
+  margin-top: 0;
+  color: #64748b;
+}
+
+.login-card label {
+  margin-top: 8px;
+  font-weight: 600;
+}
+
+.login-card input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font: inherit;
+  box-sizing: border-box;
+}
+
+.login-card button {
+  margin-top: 12px;
+  padding: 12px;
+  color: white;
+  background: #2563eb;
+  border: none;
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.login-card button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.login-error {
+  color: #dc2626;
+  font-size: 14px;
+}
+
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.actions button {
+  padding: 11px 20px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: white;
+  color: #1e293b;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.actions button.primary {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: white;
+}
+
+.actions button.danger {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: white;
+}
+
+.actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+
+/* Attendance action buttons */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.actions button {
+  padding: 12px 22px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease, opacity 0.2s ease;
+}
+
+/* Blue Clock In button */
+.actions button.primary {
+  background-color: #2563eb;
+  color: #ffffff;
+}
+
+/* Darker blue on hover */
+.actions button.primary:hover:not(:disabled) {
+  background-color: #1d4ed8;
+}
+
+/* Red Clock Out button */
+.actions button.danger {
+  background-color: #dc2626;
+  color: #ffffff;
+}
+
+/* Darker red on hover */
+.actions button.danger:hover:not(:disabled) {
+  background-color: #b91c1c;
+}
+
+/* Disabled buttons */
+.actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+
+
+/* Start Break - Green */
+.actions button.success {
+  background-color: #16a34a;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 22px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.actions button.success:hover:not(:disabled) {
+  background-color: #15803d;
+}
+
+/* End Break - Orange */
+.actions button.warning {
+  background-color: #ea580c;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 22px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.actions button.warning:hover:not(:disabled) {
+  background-color: #c2410c;
+}
+
+/* Disabled state */
+.actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
