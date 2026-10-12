@@ -1,0 +1,13 @@
+import * as Prisma from './internal/prismaNamespaceBrowser.js';
+export { Prisma };
+export * as $Enums from './enums.js';
+export * from './enums.js';
+export type Team = Prisma.TeamModel;
+export type Employee = Prisma.EmployeeModel;
+export type User = Prisma.UserModel;
+export type Shift = Prisma.ShiftModel;
+export type ShiftAssignment = Prisma.ShiftAssignmentModel;
+export type AttendanceSession = Prisma.AttendanceSessionModel;
+export type BreakRecord = Prisma.BreakRecordModel;
+export type CorrectionRequest = Prisma.CorrectionRequestModel;
+export type ActivityLog = Prisma.ActivityLogModel;

@@ -1,0 +1,205 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  EMPLOYEE
+}
+
+enum RecordStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum AttendanceStatus {
+  IN_PROGRESS
+  COMPLETED
+  INCOMPLETE
+}
+
+enum BreakType {
+  PAID
+  UNPAID
+}
+
+enum CorrectionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Team {
+  id        String     @id @default(cuid())
+  name      String     @unique
+  employees Employee[]
+  createdAt DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime   @updatedAt @db.Timestamptz(3)
+}
+
+model Employee {
+  id                String             @id @default(cuid())
+  employeeCode      String             @unique
+  name              String
+  email             String             @unique
+  status            RecordStatus       @default(ACTIVE)
+
+  teamId            String?
+  team              Team?              @relation(fields: [teamId], references: [id])
+
+  managerId         String?
+  manager           Employee?          @relation("ReportingLine", fields: [managerId], references: [id])
+  directReports     Employee[]         @relation("ReportingLine")
+
+  user              User?
+  attendanceSessions AttendanceSession[]
+  shiftAssignments  ShiftAssignment[]
+
+  createdAt         DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime           @updatedAt @db.Timestamptz(3)
+}
+
+model User {
+  id                   String             @id @default(cuid())
+  employeeId           String?            @unique
+  employee             Employee?          @relation(fields: [employeeId], references: [id])
+
+  email                String             @unique
+  passwordHash         String
+  role                 Role               @default(EMPLOYEE)
+  status               RecordStatus       @default(ACTIVE)
+
+  requestedCorrections CorrectionRequest[] @relation("CorrectionRequester")
+  reviewedCorrections  CorrectionRequest[] @relation("CorrectionReviewer")
+  activityLogs         ActivityLog[]
+
+  createdAt            DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime           @updatedAt @db.Timestamptz(3)
+}
+
+model Shift {
+  id             String            @id @default(cuid())
+  name           String
+  startTime      String
+  endTime        String
+  timezone       String
+  workingDays    Int[]
+  graceMinutes   Int               @default(0)
+  status         RecordStatus      @default(ACTIVE)
+
+  assignments    ShiftAssignment[]
+  sessions       AttendanceSession[]
+
+  createdAt      DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime          @updatedAt @db.Timestamptz(3)
+}
+
+model ShiftAssignment {
+  id          String   @id @default(cuid())
+  employeeId  String
+  shiftId     String
+  effectiveFrom DateTime @db.Date
+  effectiveTo   DateTime? @db.Date
+
+  employee    Employee @relation(fields: [employeeId], references: [id])
+  shift       Shift    @relation(fields: [shiftId], references: [id])
+
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  @@unique([employeeId, shiftId, effectiveFrom])
+  @@index([employeeId, effectiveFrom])
+}
+
+model AttendanceSession {
+  id          String           @id @default(cuid())
+  employeeId  String
+  shiftId     String?
+  shiftDate   DateTime         @db.Date
+
+  clockInAt   DateTime         @db.Timestamptz(3)
+  clockOutAt  DateTime?        @db.Timestamptz(3)
+
+  grossMinutes Int?
+  breakMinutes Int              @default(0)
+  netMinutes   Int?
+  status       AttendanceStatus @default(IN_PROGRESS)
+
+  employee     Employee         @relation(fields: [employeeId], references: [id])
+  shift        Shift?           @relation(fields: [shiftId], references: [id])
+
+  breaks       BreakRecord[]
+  corrections  CorrectionRequest[]
+
+  createdAt    DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime         @updatedAt @db.Timestamptz(3)
+
+  @@index([employeeId, shiftDate])
+  @@index([status, shiftDate])
+}
+
+model BreakRecord {
+  id                  String      @id @default(cuid())
+  attendanceSessionId String
+  startedAt           DateTime    @db.Timestamptz(3)
+  endedAt             DateTime?   @db.Timestamptz(3)
+  breakType           BreakType   @default(UNPAID)
+
+  attendanceSession   AttendanceSession @relation(fields: [attendanceSessionId], references: [id])
+
+  createdAt           DateTime    @default(now()) @db.Timestamptz(3)
+
+  @@index([attendanceSessionId])
+}
+
+model CorrectionRequest {
+  id                 String           @id @default(cuid())
+  sessionId          String
+  requestedById      String
+  reviewedById       String?
+
+  originalClockInAt  DateTime?        @db.Timestamptz(3)
+  originalClockOutAt DateTime?        @db.Timestamptz(3)
+  proposedIn         DateTime?        @db.Timestamptz(3)
+  proposedOut        DateTime?        @db.Timestamptz(3)
+
+  reason             String
+  status             CorrectionStatus @default(PENDING)
+  reviewNote         String?
+  reviewedAt         DateTime?        @db.Timestamptz(3)
+
+  session            AttendanceSession @relation(fields: [sessionId], references: [id])
+  requestedBy        User              @relation("CorrectionRequester", fields: [requestedById], references: [id])
+  reviewedBy         User?             @relation("CorrectionReviewer", fields: [reviewedById], references: [id])
+
+  createdAt          DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime          @updatedAt @db.Timestamptz(3)
+
+  @@index([status, createdAt])
+}
+
+model ActivityLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String
+  targetType String
+  targetId   String
+  oldValues  Json?
+  newValues  Json?
+
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([targetType, targetId])
+  @@index([createdAt])
+}
