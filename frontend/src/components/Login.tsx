@@ -2,12 +2,14 @@
 import { useState } from "react";
 import { api } from "../api/client";
 import axios from "axios";
+import "./Login.css";
 
 type LoginProps = {
   onLogin: (token: string) => void;
+  onRegister: () => void;
 };
 
-export default function Login({ onLogin }: LoginProps) {
+export default function Login({ onLogin ,  onRegister,}: LoginProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -79,6 +81,15 @@ export default function Login({ onLogin }: LoginProps) {
         <button type="submit" disabled={loading}>
           {loading ? "Signing in..." : "Sign In"}
         </button>
+        <div className="login-register-link">
+  Don't have an account?{" "}
+  <button
+    type="button"
+    onClick={onRegister}
+  >
+    Create account
+  </button>
+</div>
       </form>
     </main>
   );

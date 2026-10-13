@@ -1,0 +1,119 @@
+/* =========================================
+   ATTENDEASE — NAVY BLUE THEME OVERRIDES
+   Match the second reference image
+   ========================================= */
+
+.register-page {
+  background: #ffffff;
+  color: #111827;
+}
+
+/* Left branding panel */
+.register-brand {
+  background:
+    radial-gradient(
+      circle at 100% 100%,
+      rgba(41, 72, 111, 0.42) 0,
+      transparent 38%
+    ),
+    linear-gradient(145deg, #0d1930 0%, #142747 60%, #1d3557 100%);
+  color: #ffffff;
+}
+
+/* Logo */
+.register-brand-logo .logo-icon {
+  background: #29486f;
+  color: #ffffff;
+}
+
+/* Branding heading */
+.register-brand-content .eyebrow {
+  color: #cbd8eb;
+}
+
+.register-brand-content h1 {
+  color: #ffffff;
+}
+
+.register-brand-content > p {
+  color: #e2e8f0;
+}
+
+/* Feature check icons */
+.register-features .feature-icon {
+  background: #29486f;
+  color: #ffffff;
+}
+
+/* Footer */
+.register-brand-footer {
+  color: #cbd5e1;
+}
+
+/* Right form section */
+.register-form-section {
+  background: #ffffff;
+}
+
+/* Form heading */
+.register-form-container .eyebrow {
+  color: #142747;
+}
+
+.register-form-container h1 {
+  color: #142747;
+}
+
+.register-form-container .form-description {
+  color: #64748b;
+}
+
+/* Labels */
+.register-form label {
+  color: #27364b;
+}
+
+/* Inputs */
+.register-form input {
+  border-color: #d1dbea;
+  background: #ffffff;
+  color: #111827;
+}
+
+.register-form input:focus {
+  border-color: #29486f;
+  box-shadow: 0 0 0 3px rgba(41, 72, 111, 0.14);
+}
+
+/* Create Account button */
+.register-form button[type="submit"] {
+  background: #142747;
+  border-color: #142747;
+  color: #ffffff;
+}
+
+.register-form button[type="submit"]:hover:not(:disabled) {
+  background: #29486f;
+  border-color: #29486f;
+}
+
+/* Sign-in link */
+.register-signin {
+  color: #64748b;
+}
+
+.register-signin button {
+  color: #142747;
+}
+
+/* Security note */
+.register-security-note {
+  color: #94a3b8;
+}
+
+/* Responsive behavior */
+@media (max-width: 700px) {
+  .register-brand {
+    background: linear-gradient(145deg, #0d1930, #1d3557);
+  }
+}

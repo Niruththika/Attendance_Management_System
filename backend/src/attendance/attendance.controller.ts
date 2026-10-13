@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  Query,
   Post,
   Request,
   UseGuards,
@@ -58,5 +59,16 @@ export class AttendanceController {
     return this.attendanceService.getHistory(req.user.userId);
   }
 
+   // Company-wide daily attendance for ADMIN and MANAGER.
+  @Get("admin/daily")
+  getDailyAttendance(
+    @Request() req: AuthenticatedRequest,
+    @Query("date") date: string,
+  ) {
+    return this.attendanceService.getDailyAttendance(
+      req.user.userId,
+      date,
+    );
+  }
   
 }

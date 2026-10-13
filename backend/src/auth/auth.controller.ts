@@ -30,6 +30,7 @@ import {
   Post,
   Request,
   UseGuards,
+   Headers,
 } from "@nestjs/common";
 import { AuthService } from "./auth.service.js";
 import { LoginDto } from "./dto/login.dto.js";
@@ -42,10 +43,18 @@ import { Roles } from "./decorators/roles.decorator.js";
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  // @Post("register")
+  // register(@Body() dto: RegisterDto) {
+  //   return this.authService.register(dto);
+  // }
+
   @Post("register")
-  register(@Body() dto: RegisterDto) {
-    return this.authService.register(dto);
-  }
+register(
+  @Body() dto: RegisterDto,
+  @Headers("x-admin-setup-key") setupKey?: string,
+) {
+  return this.authService.register(dto, setupKey);
+}
 
   @Post("login")
   @HttpCode(HttpStatus.OK)
@@ -70,6 +79,11 @@ export class AuthController {
 adminTest() {
   return { message: "Admin access granted" };
 }
-  
+  @Post("admins")
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles("ADMIN")
+createAdmin(@Body() dto: RegisterDto) {
+  return this.authService.createAdmin(dto);
+}
 }
 
