@@ -122,6 +122,43 @@ export class CorrectionsService {
     });
   }
 
+  //new method to review a correction request
+
+  
+async getAllRequests(userId: string) {
+  const user = await this.prisma.user.findUnique({
+    where: { id: userId },
+    select: { role: true },
+  });
+
+  if (!user || (user.role !== Role.ADMIN && user.role !== Role.MANAGER)) {
+    throw new ForbiddenException(
+      "Only managers and administrators can view all correction requests",
+    );
+  }
+
+  return this.prisma.correctionRequest.findMany({
+    orderBy: { createdAt: "desc" },
+    include: {
+      session: true,
+      requestedBy: {
+        select: {
+          id: true,
+          email: true,
+          role: true,
+        },
+      },
+      reviewedBy: {
+        select: {
+          id: true,
+          email: true,
+          role: true,
+        },
+      },
+    },
+  });
+}
+
   async reviewRequest(
     userId: string,
     requestId: string,

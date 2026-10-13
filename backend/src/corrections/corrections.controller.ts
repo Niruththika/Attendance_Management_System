@@ -58,6 +58,13 @@ export class CorrectionsController {
     return this.correctionsService.getPendingRequests(req.user.userId);
   }
 
+  // new endpoint to get all requests for the user
+  
+@Get("all")
+getAllRequests(@Request() req: AuthenticatedRequest) {
+  return this.correctionsService.getAllRequests(req.user.userId);
+}
+
   @Patch(":id/review")
   reviewRequest(
     @Request() req: AuthenticatedRequest,
