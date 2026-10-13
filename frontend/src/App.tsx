@@ -5134,21 +5134,54 @@ if (!token) {
     }
   }
 
-  function handleLogout() {
-    localStorage.removeItem("accessToken");
-    setToken(null);
-    setAttendance([]);
-    setMyRequests([]);
-    setPendingRequests([]);
-    setAllRequests([]);
-    setAdminReport(null);
-    setNotification("");
-    previousRequestStatuses.current = {};
-    hasLoadedRequestStatuses.current = false;
-    setCurrentPage("dashboard");
-    setMessage("");
-    setError("");
-  }
+  // function handleLogout() {
+  //   localStorage.removeItem("accessToken");
+  //   setToken(null);
+  //   setAttendance([]);
+  //   setMyRequests([]);
+  //   setPendingRequests([]);
+  //   setAllRequests([]);
+  //   setAdminReport(null);
+  //   setNotification("");
+  //   previousRequestStatuses.current = {};
+  //   hasLoadedRequestStatuses.current = false;
+  //   setCurrentPage("dashboard");
+  //   setMessage("");
+  //   setError("");
+  // }
+
+  
+function handleLogout() {
+  // Remove the saved login token
+  localStorage.removeItem("accessToken");
+
+  // Clear the authenticated user state
+  setToken(null);
+
+  // Return to the landing page
+  setShowLanding(true);
+  setShowRegister(false);
+
+  // Reset the application page
+  setCurrentPage("dashboard");
+
+  // Clear attendance and correction data
+  setAttendance([]);
+  setMyRequests([]);
+  setPendingRequests([]);
+  setAllRequests([]);
+  setAdminReport(null);
+  setNotification("");
+
+  // Reset correction tracking
+  previousRequestStatuses.current = {};
+  hasLoadedRequestStatuses.current = false;
+
+  // Clear messages
+  setMessage("");
+  setError("");
+}
+
 
   function goToPage(page: Page) {
     setCurrentPage(page);
