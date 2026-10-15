@@ -296,3 +296,22 @@
   color: #60a5fa;
   text-decoration: underline;
 }
+
+.forgot-password-link {
+  display: flex;
+  justify-content: flex-end;
+  margin: 8px 0 16px;
+}
+
+.forgot-password-link button {
+  border: none;
+  background: none;
+  color: #2563eb;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+}
+
+.forgot-password-link button:hover {
+  text-decoration: underline;
+}

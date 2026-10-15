@@ -107,6 +107,40 @@ export default function ReportsPage() {
     }
   }
 
+  
+  async function exportCsv() {
+    setError("");
+
+    try {
+      const response = await api.get("/reports/monthly/export-csv", {
+        params: {
+          month,
+          ...(teamId ? { teamId } : {}),
+          ...(employeeId ? { employeeId } : {}),
+        },
+        responseType: "blob",
+      });
+
+      const blob = new Blob(["\uFEFF", response.data], {
+        type: "text/csv;charset=utf-8;",
+      });
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+
+      link.href = url;
+      link.download = `attendease-${month}.csv`;
+
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "CSV export failed.");
+    }
+  }
+
   return <section className="panel report-page">
     <div className="report-toolbar">
       <div><h2>Monthly Attendance Report</h2><p className="muted">Absence tracking, work duration, and team analytics.</p></div>
@@ -115,6 +149,15 @@ export default function ReportsPage() {
       </label>
       <button type="button" onClick={() => void loadReport()} disabled={loading}>{loading ? "Loading..." : "Refresh"}</button>
       <button type="button" className="primary" onClick={() => void exportExcel()} disabled={!report}>Export Excel</button>
+      
+<button
+  type="button"
+  onClick={() => void exportCsv()}
+  disabled={!report || loading}
+>
+  Export CSV
+</button>
+
     </div>
     {error && <p className="notice" role="alert">{error}</p>}
     {loading && !report && <p className="muted">Loading monthly report...</p>}

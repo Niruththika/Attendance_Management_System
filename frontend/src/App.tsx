@@ -1430,7 +1430,7 @@
 //           </>
 //         )}
 
-//         ```tsx
+//   
 // {currentPage === "reports" && canReview && <ReportsPage />}
 // ```
 //       </main>
@@ -2286,6 +2286,54 @@ setShiftLoading(false);
     setMessage("");
   }
 
+
+  
+function downloadCsv(
+  filename: string,
+  rows: Record<string, string | number | null>[]
+) {
+  if (rows.length === 0) {
+    alert("No report data available to export.");
+    return;
+  }
+
+  const headers = Object.keys(rows[0]);
+
+  const escapeCsv = (value: unknown) => {
+    let text = value == null ? "" : String(value);
+
+    // Prevent spreadsheet formula injection.
+    if (/^[\t\r ]*[=+\-@]/.test(text)) {
+      text = "'" + text;
+    }
+
+    return `"${text.replace(/"/g, '""')}"`;
+  };
+
+  const csvContent = [
+    headers.map(escapeCsv).join(","),
+    ...rows.map((row) =>
+      headers.map((header) => escapeCsv(row[header])).join(",")
+    ),
+  ].join("\r\n");
+
+  // BOM helps Excel display UTF-8 text correctly.
+  const blob = new Blob(["\uFEFF", csvContent], {
+    type: "text/csv;charset=utf-8;",
+  });
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  URL.revokeObjectURL(url);
+}
+
   function renderCorrectionCard(request: CorrectionRequest) {
     return (
       <article className="correction-card" key={request.id}>
@@ -2875,7 +2923,21 @@ function renderAdminDashboard() {
           >
             {canReview ? "Correction Management" : "Correction Requests"}
           </a>
-          <a
+
+          
+{canReview && (
+  <a
+    href="#reports"
+    className={currentPage === "reports" ? "active" : ""}
+    onClick={(event) => {
+      event.preventDefault();
+      goToPage("reports");
+    }}
+  >
+    Reports
+  </a>
+)}
+          {/* <a
             href="#reports"
             className={currentPage === "reports" ? "active" : ""}
             onClick={(event) => {
@@ -2884,7 +2946,7 @@ function renderAdminDashboard() {
             }}
           >
             Reports
-          </a>
+          </a> */}
           {/* {role === "ADMIN" && (
   <button onClick={() => goToPage("adminRegister")}>
     Register Admin
@@ -2951,7 +3013,7 @@ function renderAdminDashboard() {
         </nav>
         <div className="sidebar-bottom">
           <p>Attendance Management</p>
-          <small>Version 1.0</small>
+         
         </div>
       {/* {role === "ADMIN" && (
   <a
@@ -3859,9 +3921,9 @@ function renderAdminDashboard() {
         )}
 
      
-If those backticks are actually present in your `App.tsx` file, remove them. The correct JSX is simply:
 
-```tsx
+
+
 {currentPage === "reports" && canReview && <ReportsPage />}
       </main>
     </div>

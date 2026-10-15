@@ -7,6 +7,7 @@ import "./Login.css";
 type LoginProps = {
   onLogin: (token: string) => void;
   onRegister: () => void;
+  
 };
 
 export default function Login({ onLogin ,  onRegister,}: LoginProps) {
