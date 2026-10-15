@@ -7,6 +7,13 @@ The Admin has full control over the AttendEase attendance management system.
 
 - Manage employees, managers, and user accounts.
 - Create, update, and deactivate employee accounts.
+- 1st admin can add another admin
+- ###use this command to generate the ADMIN_SETUP_KEY 
+using this key to signup as 1st login
+
+***node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"  ***###
+
+- Admin & Manager registration is not in Public
 - assign the Manager
 - Manage teams and employee assignments.
 - Monitor attendance records across the organization.
@@ -506,6 +513,9 @@ npm run build
 Use the start scripts defined in each `package.json` when running production builds.
 
 ---
+use this command to generate the ADMIN_SETUP_KEY 
+using this key to signup as 1st login
+***node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"  ***
 
 ## Attendance and Break Calculation
 
