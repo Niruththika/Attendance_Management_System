@@ -27,6 +27,9 @@ let CorrectionsController = class CorrectionsController {
     getPendingRequests(req) {
         return this.correctionsService.getPendingRequests(req.user.userId);
     }
+    getAllRequests(req) {
+        return this.correctionsService.getAllRequests(req.user.userId);
+    }
     reviewRequest(req, id, body) {
         return this.correctionsService.reviewRequest(req.user.userId, id, body.decision, body.reviewNote);
     }
@@ -53,6 +56,13 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
 ], CorrectionsController.prototype, "getPendingRequests", null);
+__decorate([
+    Get("all"),
+    __param(0, Request()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], CorrectionsController.prototype, "getAllRequests", null);
 __decorate([
     Patch(":id/review"),
     __param(0, Request()),

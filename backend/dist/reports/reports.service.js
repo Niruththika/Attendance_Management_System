@@ -1,0 +1,353 @@
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+import { BadRequestException, ForbiddenException, Injectable, } from "@nestjs/common";
+import { PrismaService } from "../prisma/prisma.service.js";
+import { BreakType, RecordStatus } from "../generated/prisma/client.js";
+const TIME_ZONE = "Asia/Colombo";
+const DAY_MS = 24 * 60 * 60 * 1000;
+const SRI_LANKA_OFFSET_MS = 330 * 60 * 1000;
+function parseMonth(month) {
+    if (!/^\d{4}-\d{2}$/.test(month || "")) {
+        throw new BadRequestException("month must use YYYY-MM format");
+    }
+    const [year, monthNumber] = month.split("-").map(Number);
+    if (monthNumber < 1 || monthNumber > 12) {
+        throw new BadRequestException("Invalid month");
+    }
+    return { year, monthNumber };
+}
+function sriLankaDayStartUtc(year, monthIndex, day) {
+    return new Date(Date.UTC(year, monthIndex, day) - SRI_LANKA_OFFSET_MS);
+}
+function sriLankaDateKey(date) {
+    const shifted = new Date(date.getTime() + SRI_LANKA_OFFSET_MS);
+    return [
+        shifted.getUTCFullYear(),
+        String(shifted.getUTCMonth() + 1).padStart(2, "0"),
+        String(shifted.getUTCDate()).padStart(2, "0"),
+    ].join("-");
+}
+function isWeekday(dateKey) {
+    const [year, month, day] = dateKey.split("-").map(Number);
+    const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+    return weekday >= 1 && weekday <= 5;
+}
+function listWeekdays(startKey, endKey) {
+    const result = [];
+    const [sy, sm, sd] = startKey.split("-").map(Number);
+    const [ey, em, ed] = endKey.split("-").map(Number);
+    const cursor = new Date(Date.UTC(sy, sm - 1, sd));
+    const end = new Date(Date.UTC(ey, em - 1, ed));
+    while (cursor <= end) {
+        const key = [
+            cursor.getUTCFullYear(),
+            String(cursor.getUTCMonth() + 1).padStart(2, "0"),
+            String(cursor.getUTCDate()).padStart(2, "0"),
+        ].join("-");
+        if (isWeekday(key)) {
+            result.push(key);
+        }
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+    return result;
+}
+let ReportsService = class ReportsService {
+    prisma;
+    constructor(prisma) {
+        this.prisma = prisma;
+    }
+    async assertReportAccess(userId) {
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+                role: true,
+                employeeId: true,
+                status: true,
+            },
+        });
+        if (!user ||
+            user.status !== RecordStatus.ACTIVE ||
+            !["ADMIN", "MANAGER"].includes(user.role)) {
+            throw new ForbiddenException("Only active administrators and managers can view reports");
+        }
+        return user;
+    }
+    async getMonthlyReport(userId, filters) {
+        const user = await this.assertReportAccess(userId);
+        const { year, monthNumber } = parseMonth(filters.month);
+        const now = new Date();
+        const nowKey = sriLankaDateKey(now);
+        const currentMonthKey = nowKey.slice(0, 7);
+        const monthStartKey = `${year}-${String(monthNumber).padStart(2, "0")}-01`;
+        const nextMonthStart = new Date(Date.UTC(year, monthNumber, 1));
+        const monthEndDay = new Date(nextMonthStart.getTime() - DAY_MS).getUTCDate();
+        const monthEndKey = `${year}-${String(monthNumber).padStart(2, "0")}-${String(monthEndDay).padStart(2, "0")}`;
+        const effectiveEndKey = filters.month === currentMonthKey
+            ? nowKey
+            : monthEndKey;
+        const startUtc = sriLankaDayStartUtc(year, monthNumber - 1, 1);
+        const endUtcExclusive = sriLankaDayStartUtc(year, monthNumber, 1);
+        const employeeWhere = {
+            status: RecordStatus.ACTIVE,
+            ...(filters.employeeId
+                ? { id: filters.employeeId }
+                : {}),
+            ...(filters.teamId
+                ? { teamId: filters.teamId }
+                : {}),
+        };
+        if (user.role === "MANAGER") {
+            if (!user.employeeId) {
+                employeeWhere.id = "__no_employee__";
+            }
+            else {
+                employeeWhere.OR = [
+                    { managerId: user.employeeId },
+                    { id: user.employeeId },
+                ];
+            }
+        }
+        const employees = await this.prisma.employee.findMany({
+            where: employeeWhere,
+            select: {
+                id: true,
+                employeeCode: true,
+                name: true,
+                email: true,
+                team: {
+                    select: {
+                        id: true,
+                        name: true,
+                    },
+                },
+                attendanceSessions: {
+                    where: {
+                        clockInAt: {
+                            gte: startUtc,
+                            lt: endUtcExclusive,
+                        },
+                    },
+                    include: {
+                        breaks: {
+                            orderBy: {
+                                startedAt: "asc",
+                            },
+                        },
+                    },
+                    orderBy: {
+                        clockInAt: "asc",
+                    },
+                },
+            },
+            orderBy: {
+                name: "asc",
+            },
+        });
+        const employeeIds = employees.map((employee) => employee.id);
+        const correctionRequests = employeeIds.length
+            ? await this.prisma.correctionRequest.findMany({
+                where: {
+                    session: {
+                        employeeId: { in: employeeIds },
+                        clockInAt: {
+                            gte: startUtc,
+                            lt: endUtcExclusive,
+                        },
+                    },
+                },
+                select: {
+                    status: true,
+                    session: {
+                        select: {
+                            employeeId: true,
+                        },
+                    },
+                },
+            })
+            : [];
+        const correctionCountsByEmployee = new Map();
+        for (const employeeId of employeeIds) {
+            correctionCountsByEmployee.set(employeeId, {
+                pending: 0,
+                approved: 0,
+                rejected: 0,
+            });
+        }
+        for (const request of correctionRequests) {
+            const employeeId = request.session.employeeId;
+            const counts = correctionCountsByEmployee.get(employeeId);
+            if (!counts)
+                continue;
+            switch (request.status) {
+                case "PENDING":
+                    counts.pending++;
+                    break;
+                case "APPROVED":
+                    counts.approved++;
+                    break;
+                case "REJECTED":
+                    counts.rejected++;
+                    break;
+            }
+        }
+        const workdays = listWeekdays(monthStartKey, effectiveEndKey);
+        const rows = employees.map((employee) => {
+            const sessionsByDate = new Map();
+            for (const session of employee.attendanceSessions) {
+                const key = sriLankaDateKey(session.clockInAt);
+                const existing = sessionsByDate.get(key) ?? [];
+                existing.push(session);
+                sessionsByDate.set(key, existing);
+            }
+            let presentDays = 0;
+            let absentDays = 0;
+            let incompleteDays = 0;
+            let grossMinutes = 0;
+            let breakMinutes = 0;
+            let netMinutes = 0;
+            const daily = workdays.map((date) => {
+                const sessions = sessionsByDate.get(date) ?? [];
+                const hasSession = sessions.length > 0;
+                const isFuture = date > nowKey;
+                const isToday = date === nowKey;
+                const hasIncompleteSession = sessions.some((session) => session.status === "INCOMPLETE" ||
+                    (session.status === "IN_PROGRESS" &&
+                        !session.clockOutAt));
+                let status;
+                if (isFuture || (isToday && !hasSession)) {
+                    status = "NOT_YET";
+                }
+                else if (!hasSession) {
+                    status = "ABSENT";
+                }
+                else if (hasIncompleteSession) {
+                    status = "INCOMPLETE";
+                }
+                else {
+                    status = "PRESENT";
+                }
+                if (status === "PRESENT") {
+                    presentDays++;
+                }
+                else if (status === "ABSENT") {
+                    absentDays++;
+                }
+                else if (status === "INCOMPLETE") {
+                    incompleteDays++;
+                }
+                let dayGross = 0;
+                let dayBreak = 0;
+                let dayNet = 0;
+                for (const session of sessions) {
+                    const sessionEnd = session.clockOutAt ?? now;
+                    const gross = Math.max(0, Math.floor((sessionEnd.getTime() -
+                        session.clockInAt.getTime()) / 60000));
+                    const unpaidBreaks = session.breaks.reduce((sum, breakRecord) => {
+                        if (breakRecord.breakType !== BreakType.UNPAID) {
+                            return sum;
+                        }
+                        const breakEnd = breakRecord.endedAt ??
+                            (session.clockOutAt ?? now);
+                        const duration = Math.max(0, Math.floor((breakEnd.getTime() -
+                            breakRecord.startedAt.getTime()) / 60000));
+                        return sum + duration;
+                    }, 0);
+                    const net = Math.max(0, gross - unpaidBreaks);
+                    dayGross += gross;
+                    dayBreak += unpaidBreaks;
+                    dayNet += net;
+                }
+                grossMinutes += dayGross;
+                breakMinutes += dayBreak;
+                netMinutes += dayNet;
+                return {
+                    date,
+                    status,
+                    sessions: sessions.length,
+                    grossMinutes: dayGross,
+                    breakMinutes: dayBreak,
+                    netMinutes: dayNet,
+                };
+            });
+            return {
+                employeeId: employee.id,
+                employeeCode: employee.employeeCode,
+                name: employee.name,
+                email: employee.email,
+                team: employee.team?.name ?? "Unassigned",
+                teamId: employee.team?.id ?? null,
+                scheduledDaysElapsed: workdays.filter((date) => date < nowKey).length,
+                presentDays,
+                absentDays,
+                incompleteDays,
+                lateDays: 0,
+                grossMinutes,
+                breakMinutes,
+                netMinutes,
+                correctionCounts: correctionCountsByEmployee.get(employee.id) ?? {
+                    pending: 0,
+                    approved: 0,
+                    rejected: 0,
+                },
+                daily,
+            };
+        });
+        const totalPresent = rows.reduce((sum, row) => sum + row.presentDays, 0);
+        const totalAbsent = rows.reduce((sum, row) => sum + row.absentDays, 0);
+        const totalIncomplete = rows.reduce((sum, row) => sum + row.incompleteDays, 0);
+        const totalNetMinutes = rows.reduce((sum, row) => sum + row.netMinutes, 0);
+        const dailyTrend = workdays
+            .filter((date) => date <= nowKey)
+            .map((date) => {
+            const dailyRows = rows.map((row) => row.daily.find((day) => day.date === date));
+            return {
+                date,
+                present: dailyRows.filter((day) => day?.status === "PRESENT").length,
+                absent: dailyRows.filter((day) => day?.status === "ABSENT").length,
+                incomplete: dailyRows.filter((day) => day?.status === "INCOMPLETE").length,
+            };
+        });
+        const teamSummary = Object.values(rows.reduce((acc, row) => {
+            const key = row.team;
+            acc[key] ??= {
+                team: key,
+                presentDays: 0,
+                absentDays: 0,
+                netMinutes: 0,
+            };
+            acc[key].presentDays += row.presentDays;
+            acc[key].absentDays += row.absentDays;
+            acc[key].netMinutes += row.netMinutes;
+            return acc;
+        }, {}));
+        return {
+            month: filters.month,
+            timezone: TIME_ZONE,
+            workingDays: workdays.length,
+            employeeCount: rows.length,
+            totals: {
+                presentDays: totalPresent,
+                absentDays: totalAbsent,
+                incompleteDays: totalIncomplete,
+                netMinutes: totalNetMinutes,
+            },
+            dailyTrend,
+            teamSummary,
+            employees: rows,
+            note: "Monday-Friday schedule assumption. No leave or public-holiday records are configured. Absences are counted only for past weekdays without an attendance session. The current day is not marked absent when no session exists. Late arrivals are not calculated because shift start times are not used in this report.",
+        };
+    }
+};
+ReportsService = __decorate([
+    Injectable(),
+    __metadata("design:paramtypes", [PrismaService])
+], ReportsService);
+export { ReportsService };
+//# sourceMappingURL=reports.service.js.map

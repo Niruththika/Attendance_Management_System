@@ -18,6 +18,10 @@ import { DashboardModule } from './dashboard/dashboard.module.js';
 import { ReportsModule } from './reports/reports.module.js';
 import { ActivityLogsModule } from './activity-logs/activity-logs.module.js';
 import { ConfigModule } from "@nestjs/config";
+import { TeamsService } from './teams/teams.service.js';
+import { TeamsController } from './teams/teams.controller.js';
+import { TeamsModule } from './teams/teams.module.js';
+import { ScheduleModule } from "@nestjs/schedule";
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 let AppModule = class AppModule {
 };
@@ -41,9 +45,11 @@ AppModule = __decorate([
             DashboardModule,
             ReportsModule,
             ActivityLogsModule,
+            TeamsModule,
+            ScheduleModule.forRoot(),
         ],
-        controllers: [AppController],
-        providers: [AppService],
+        controllers: [AppController, TeamsController],
+        providers: [AppService, TeamsService],
     })
 ], AppModule);
 export { AppModule };

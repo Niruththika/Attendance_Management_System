@@ -10,7 +10,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
-import { Body, Controller, Get, Post, Request, UseGuards, } from "@nestjs/common";
+import { Body, Controller, Get, Query, Post, Request, UseGuards, } from "@nestjs/common";
 import { AttendanceService } from "./attendance.service.js";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard.js";
 import { StartBreakDto } from "./dto/start-break.dto.js";
@@ -33,6 +33,12 @@ let AttendanceController = class AttendanceController {
     }
     getHistory(req) {
         return this.attendanceService.getHistory(req.user.userId);
+    }
+    getManagerDailyAttendance(req, date) {
+        return this.attendanceService.getManagerDailyAttendance(req.user.userId, date);
+    }
+    getDailyAttendance(req, date) {
+        return this.attendanceService.getDailyAttendance(req.user.userId, date);
     }
 };
 __decorate([
@@ -71,6 +77,22 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
 ], AttendanceController.prototype, "getHistory", null);
+__decorate([
+    Get("manager/daily"),
+    __param(0, Request()),
+    __param(1, Query("date")),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], AttendanceController.prototype, "getManagerDailyAttendance", null);
+__decorate([
+    Get("admin/daily"),
+    __param(0, Request()),
+    __param(1, Query("date")),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], AttendanceController.prototype, "getDailyAttendance", null);
 AttendanceController = __decorate([
     Controller("attendance"),
     UseGuards(JwtAuthGuard),

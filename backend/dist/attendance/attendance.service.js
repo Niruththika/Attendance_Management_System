@@ -7,13 +7,40 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
-import { BadRequestException, ConflictException, Injectable, NotFoundException, } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { AttendanceStatus, BreakType, RecordStatus, } from "../generated/prisma/client.js";
+import { Interval } from "@nestjs/schedule";
 let AttendanceService = class AttendanceService {
     prisma;
     constructor(prisma) {
         this.prisma = prisma;
+    }
+    async closeExpiredPaidBreaks() {
+        const cutoff = new Date(Date.now() - 45 * 60 * 1000);
+        const expiredBreaks = await this.prisma.breakRecord.findMany({
+            where: {
+                breakType: BreakType.PAID,
+                endedAt: null,
+                startedAt: { lte: cutoff },
+            },
+            select: {
+                id: true,
+                startedAt: true,
+            },
+        });
+        for (const item of expiredBreaks) {
+            const deadline = new Date(item.startedAt.getTime() + 45 * 60 * 1000);
+            await this.prisma.breakRecord.updateMany({
+                where: {
+                    id: item.id,
+                    endedAt: null,
+                },
+                data: {
+                    endedAt: deadline,
+                },
+            });
+        }
     }
     async clockIn(userId) {
         const user = await this.prisma.user.findUnique({
@@ -51,6 +78,232 @@ let AttendanceService = class AttendanceService {
                 status: AttendanceStatus.IN_PROGRESS,
             },
         });
+    }
+    async getDailyAttendance(userId, dateString) {
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: { role: true },
+        });
+        if (!user || user.role !== "ADMIN") {
+            throw new ForbiddenException("Only administrators can view company-wide attendance");
+        }
+        if (!dateString ||
+            !/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+            throw new BadRequestException("Please provide a date in YYYY-MM-DD format");
+        }
+        const [year, month, day] = dateString.split("-").map(Number);
+        const selectedDate = new Date(Date.UTC(year, month - 1, day));
+        if (selectedDate.getUTCFullYear() !== year ||
+            selectedDate.getUTCMonth() !== month - 1 ||
+            selectedDate.getUTCDate() !== day) {
+            throw new BadRequestException("Invalid date");
+        }
+        const startUtc = new Date(Date.UTC(year, month - 1, day) - 330 * 60 * 1000);
+        const endUtc = new Date(startUtc.getTime() + 24 * 60 * 60 * 1000);
+        const sessions = await this.prisma.attendanceSession.findMany({
+            where: {
+                clockInAt: {
+                    gte: startUtc,
+                    lt: endUtc,
+                },
+            },
+            include: {
+                employee: {
+                    select: {
+                        id: true,
+                        employeeCode: true,
+                        name: true,
+                        email: true,
+                        status: true,
+                        team: {
+                            select: {
+                                name: true,
+                            },
+                        },
+                    },
+                },
+                breaks: {
+                    orderBy: {
+                        startedAt: "asc",
+                    },
+                },
+            },
+            orderBy: [
+                { clockInAt: "asc" },
+                { employee: { name: "asc" } },
+            ],
+        });
+        const now = new Date();
+        const records = sessions.map((session) => {
+            const effectiveClockOut = session.clockOutAt ?? now;
+            const grossMinutes = Math.max(0, Math.floor((effectiveClockOut.getTime() -
+                session.clockInAt.getTime()) /
+                60000));
+            const breakMinutes = session.breaks.reduce((total, breakRecord) => {
+                if (breakRecord.breakType !== BreakType.UNPAID) {
+                    return total;
+                }
+                const effectiveBreakEnd = breakRecord.endedAt ?? now;
+                const minutes = Math.max(0, Math.floor((effectiveBreakEnd.getTime() -
+                    breakRecord.startedAt.getTime()) /
+                    60000));
+                return total + minutes;
+            }, 0);
+            const netMinutes = Math.max(0, grossMinutes - breakMinutes);
+            return {
+                sessionId: session.id,
+                employee: session.employee,
+                clockInAt: session.clockInAt,
+                clockOutAt: session.clockOutAt,
+                status: session.status,
+                isCurrentlyWorking: session.clockOutAt === null,
+                grossMinutes,
+                breakMinutes,
+                netMinutes,
+                breaks: session.breaks,
+            };
+        });
+        return {
+            date: dateString,
+            timezone: "Asia/Colombo",
+            totalRecords: records.length,
+            currentlyWorking: records.filter((record) => record.isCurrentlyWorking).length,
+            completed: records.filter((record) => record.clockOutAt !== null).length,
+            records,
+        };
+    }
+    async getManagerDailyAttendance(userId, dateString) {
+        const manager = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+                role: true,
+                employeeId: true,
+            },
+        });
+        if (!manager ||
+            manager.role !== "MANAGER" ||
+            !manager.employeeId) {
+            throw new ForbiddenException("A linked Manager account is required");
+        }
+        if (!dateString || !/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+            throw new BadRequestException("Please provide a date in YYYY-MM-DD format");
+        }
+        const [year, month, day] = dateString.split("-").map(Number);
+        const selectedDate = new Date(Date.UTC(year, month - 1, day));
+        if (selectedDate.getUTCFullYear() !== year ||
+            selectedDate.getUTCMonth() !== month - 1 ||
+            selectedDate.getUTCDate() !== day) {
+            throw new BadRequestException("Invalid date");
+        }
+        const startUtc = new Date(Date.UTC(year, month - 1, day) - 330 * 60 * 1000);
+        const endUtc = new Date(startUtc.getTime() + 24 * 60 * 60 * 1000);
+        const employees = await this.prisma.employee.findMany({
+            where: {
+                managerId: manager.employeeId,
+            },
+            select: {
+                id: true,
+                employeeCode: true,
+                name: true,
+                email: true,
+                status: true,
+                team: {
+                    select: { name: true },
+                },
+                attendanceSessions: {
+                    where: {
+                        clockInAt: {
+                            gte: startUtc,
+                            lt: endUtc,
+                        },
+                    },
+                    include: {
+                        breaks: {
+                            orderBy: { startedAt: "asc" },
+                        },
+                    },
+                    orderBy: { clockInAt: "asc" },
+                },
+            },
+            orderBy: { name: "asc" },
+        });
+        const now = new Date();
+        const records = employees.map((employee) => {
+            const session = employee.attendanceSessions[0] ?? null;
+            if (!session) {
+                return {
+                    sessionId: null,
+                    employee: {
+                        id: employee.id,
+                        employeeCode: employee.employeeCode,
+                        name: employee.name,
+                        email: employee.email,
+                        status: employee.status,
+                        team: employee.team,
+                    },
+                    clockInAt: null,
+                    clockOutAt: null,
+                    status: "NOT_CLOCKED_IN",
+                    isCurrentlyWorking: false,
+                    isOnBreak: false,
+                    grossMinutes: 0,
+                    breakMinutes: 0,
+                    netMinutes: 0,
+                    breaks: [],
+                };
+            }
+            const effectiveClockOut = session.clockOutAt ?? now;
+            const grossMinutes = Math.max(0, Math.floor((effectiveClockOut.getTime() -
+                session.clockInAt.getTime()) / 60000));
+            const breakMinutes = session.breaks.reduce((total, item) => {
+                if (item.breakType !== BreakType.UNPAID)
+                    return total;
+                const effectiveEnd = item.endedAt ?? now;
+                return (total +
+                    Math.max(0, Math.floor((effectiveEnd.getTime() -
+                        item.startedAt.getTime()) / 60000)));
+            }, 0);
+            const isCurrentlyWorking = session.clockOutAt === null;
+            const isOnBreak = isCurrentlyWorking &&
+                session.breaks.some((item) => item.endedAt === null);
+            return {
+                sessionId: session.id,
+                employee: {
+                    id: employee.id,
+                    employeeCode: employee.employeeCode,
+                    name: employee.name,
+                    email: employee.email,
+                    status: employee.status,
+                    team: employee.team,
+                },
+                clockInAt: session.clockInAt,
+                clockOutAt: session.clockOutAt,
+                status: isOnBreak
+                    ? "ON_BREAK"
+                    : isCurrentlyWorking
+                        ? "WORKING"
+                        : "COMPLETED",
+                isCurrentlyWorking,
+                isOnBreak,
+                grossMinutes,
+                breakMinutes,
+                netMinutes: Math.max(0, grossMinutes - breakMinutes),
+                breaks: session.breaks,
+            };
+        });
+        const sessionsWithRecords = records.filter((record) => record.sessionId !== null);
+        return {
+            date: dateString,
+            timezone: "Asia/Colombo",
+            totalEmployees: records.length,
+            totalRecords: sessionsWithRecords.length,
+            currentlyWorking: records.filter((record) => record.isCurrentlyWorking).length,
+            onBreak: records.filter((record) => record.isOnBreak).length,
+            completed: records.filter((record) => record.sessionId !== null && !record.isCurrentlyWorking).length,
+            notClockedIn: records.filter((record) => record.sessionId === null).length,
+            totalNetMinutes: sessionsWithRecords.reduce((total, record) => total + record.netMinutes, 0),
+            records,
+        };
     }
     async clockOut(userId) {
         const user = await this.prisma.user.findUnique({
@@ -117,7 +370,7 @@ let AttendanceService = class AttendanceService {
             },
         });
     }
-    async startBreak(userId, breakType) {
+    async startBreak(userId, breakType = BreakType.UNPAID) {
         const user = await this.prisma.user.findUnique({
             where: { id: userId },
             select: { employeeId: true },
@@ -179,7 +432,12 @@ let AttendanceService = class AttendanceService {
         if (!openBreak) {
             throw new NotFoundException("No open break was found");
         }
-        const endedAt = new Date();
+        const now = new Date();
+        const paidBreakDeadline = new Date(openBreak.startedAt.getTime() + 45 * 60 * 1000);
+        const endedAt = openBreak.breakType === BreakType.PAID &&
+            now > paidBreakDeadline
+            ? paidBreakDeadline
+            : now;
         if (endedAt <= openBreak.startedAt) {
             throw new BadRequestException("Invalid break end time");
         }
@@ -229,6 +487,12 @@ let AttendanceService = class AttendanceService {
         });
     }
 };
+__decorate([
+    Interval(30_000),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], AttendanceService.prototype, "closeExpiredPaidBreaks", null);
 AttendanceService = __decorate([
     Injectable(),
     __metadata("design:paramtypes", [PrismaService])

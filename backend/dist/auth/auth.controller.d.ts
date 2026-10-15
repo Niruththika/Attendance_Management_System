@@ -4,12 +4,12 @@ import { RegisterDto } from "./dto/register.dto.js";
 export declare class AuthController {
     private readonly authService;
     constructor(authService: AuthService);
-    register(dto: RegisterDto): Promise<{
-        id: string;
-        createdAt: Date;
+    register(dto: RegisterDto, setupKey?: string): Promise<{
         email: string;
-        employeeId: string | null;
         role: import("../generated/prisma/enums.js").Role;
+        id: string;
+        employeeId: string | null;
+        createdAt: Date;
     }>;
     login(dto: LoginDto): Promise<{
         accessToken: string;
@@ -31,4 +31,18 @@ export declare class AuthController {
     adminTest(): {
         message: string;
     };
+    createAdmin(dto: RegisterDto): Promise<{
+        email: string;
+        role: import("../generated/prisma/enums.js").Role;
+        id: string;
+        employeeId: string | null;
+        createdAt: Date;
+    }>;
+    createManager(dto: RegisterDto): Promise<{
+        email: string;
+        role: import("../generated/prisma/enums.js").Role;
+        id: string;
+        employeeId: string | null;
+        createdAt: Date;
+    }>;
 }

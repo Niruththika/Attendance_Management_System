@@ -125,6 +125,113 @@ export class ReportsController {
     private readonly reportsService: ReportsService,
   ) {}
 
+  
+  @Get("monthly/export-csv")
+  async exportMonthlyCsv(
+    @Request() req: AuthenticatedRequest,
+    @Query("month") month: string,
+    @Query("teamId") teamId: string | undefined,
+    @Query("employeeId") employeeId: string | undefined,
+    @Res() res: Response,
+  ) {
+    const report = await this.reportsService.getMonthlyReport(
+      req.user.userId,
+      { month, teamId, employeeId },
+    );
+
+    const headers = [
+      "Report Month",
+      "Employee Code",
+      "Employee Name",
+      "Email",
+      "Team",
+      "Present Days",
+      "Absent Days",
+      "Incomplete Days",
+      "Total Gross Minutes",
+      "Total Gross Hours",
+      "Total Break Minutes",
+      "Total Break Hours",
+     "Total Net Minutes",
+"Total Net Hours",
+"Pending Corrections",
+"Approved Corrections",
+"Rejected Corrections",
+"Date",
+      "Daily Status",
+      "Sessions",
+      "Daily Gross Minutes",
+      "Daily Break Minutes",
+      "Daily Net Minutes",
+    ];
+
+    const escapeCsv = (value: unknown): string => {
+      let text = value == null ? "" : String(value);
+
+      // Prevent spreadsheet formula injection.
+      if (/^[\t\r ]*[=+\-@]/.test(text)) {
+        text = "'" + text;
+      }
+
+      return `"${text.replace(/"/g, '""')}"`;
+    };
+
+    const rows = report.employees.flatMap((employee) => {
+      const dailyRecords = employee.daily?.length
+        ? employee.daily
+        : [null];
+
+      return dailyRecords.map((day) => [
+        report.month,
+        employee.employeeCode,
+        employee.name,
+        employee.email,
+        employee.team,
+        employee.presentDays,
+        employee.absentDays,
+        employee.incompleteDays,
+        employee.grossMinutes,
+        Number((employee.grossMinutes / 60).toFixed(2)),
+        employee.breakMinutes,
+        Number((employee.breakMinutes / 60).toFixed(2)),
+      employee.netMinutes,
+Number((employee.netMinutes / 60).toFixed(2)),
+employee.correctionCounts.pending,
+employee.correctionCounts.approved,
+employee.correctionCounts.rejected,
+day?.date ?? "",
+        day?.status ?? "",
+        day?.sessions ?? "",
+        day?.grossMinutes ?? "",
+        day?.breakMinutes ?? "",
+        day?.netMinutes ?? "",
+      ]);
+    });
+
+    const csvContent = [
+      headers.map(escapeCsv).join(","),
+      ...rows.map((row) => row.map(escapeCsv).join(",")),
+    ].join("\r\n");
+
+    const safeMonth = /^\d{4}-\d{2}$/.test(month || "")
+      ? month
+      : "report";
+
+    res.setHeader(
+      "Content-Type",
+      "text/csv; charset=utf-8",
+    );
+
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="attendease-${safeMonth}.csv"`,
+    );
+
+    // UTF-8 BOM helps Excel display text correctly.
+    res.send("\uFEFF" + csvContent);
+  }
+
+
   @Get("monthly")
   getMonthly(
     @Request() req: AuthenticatedRequest,

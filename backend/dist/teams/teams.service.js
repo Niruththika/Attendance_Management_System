@@ -1,0 +1,60 @@
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+import { Injectable, ConflictException, BadRequestException, } from "@nestjs/common";
+import { PrismaService } from "../prisma/prisma.service.js";
+let TeamsService = class TeamsService {
+    prisma;
+    constructor(prisma) {
+        this.prisma = prisma;
+    }
+    async findAll() {
+        return this.prisma.team.findMany({
+            select: {
+                id: true,
+                name: true,
+            },
+            orderBy: {
+                name: "asc",
+            },
+        });
+    }
+    async create(name) {
+        const teamName = name?.trim();
+        if (!teamName) {
+            throw new BadRequestException("Team name is required.");
+        }
+        const existingTeam = await this.prisma.team.findFirst({
+            where: {
+                name: {
+                    equals: teamName,
+                    mode: "insensitive",
+                },
+            },
+        });
+        if (existingTeam) {
+            throw new ConflictException("A team with this name already exists.");
+        }
+        return this.prisma.team.create({
+            data: {
+                name: teamName,
+            },
+            select: {
+                id: true,
+                name: true,
+            },
+        });
+    }
+};
+TeamsService = __decorate([
+    Injectable(),
+    __metadata("design:paramtypes", [PrismaService])
+], TeamsService);
+export { TeamsService };
+//# sourceMappingURL=teams.service.js.map

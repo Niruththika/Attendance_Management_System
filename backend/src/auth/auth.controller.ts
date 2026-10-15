@@ -85,5 +85,12 @@ adminTest() {
 createAdmin(@Body() dto: RegisterDto) {
   return this.authService.createAdmin(dto);
 }
+
+ @Post("managers")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles("ADMIN")
+  createManager(@Body() dto: RegisterDto) {
+    return this.authService.createManager(dto);
+  }
 }
 

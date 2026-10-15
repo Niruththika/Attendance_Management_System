@@ -13,31 +13,31 @@ export declare class AttendanceController {
     constructor(attendanceService: AttendanceService);
     clockIn(req: AuthenticatedRequest): Promise<{
         id: string;
-        employeeId: string;
-        status: import("../generated/prisma/enums.js").AttendanceStatus;
-        createdAt: Date;
-        updatedAt: Date;
-        shiftId: string | null;
         shiftDate: Date;
         clockInAt: Date;
         clockOutAt: Date | null;
         grossMinutes: number | null;
         breakMinutes: number;
         netMinutes: number | null;
+        status: import("../generated/prisma/enums.js").AttendanceStatus;
+        createdAt: Date;
+        updatedAt: Date;
+        employeeId: string;
+        shiftId: string | null;
     }>;
     clockOut(req: AuthenticatedRequest): Promise<{
         id: string;
-        employeeId: string;
-        status: import("../generated/prisma/enums.js").AttendanceStatus;
-        createdAt: Date;
-        updatedAt: Date;
-        shiftId: string | null;
         shiftDate: Date;
         clockInAt: Date;
         clockOutAt: Date | null;
         grossMinutes: number | null;
         breakMinutes: number;
         netMinutes: number | null;
+        status: import("../generated/prisma/enums.js").AttendanceStatus;
+        createdAt: Date;
+        updatedAt: Date;
+        employeeId: string;
+        shiftId: string | null;
     }>;
     startBreak(req: AuthenticatedRequest, dto: StartBreakDto): Promise<{
         id: string;
@@ -66,18 +66,79 @@ export declare class AttendanceController {
         }[];
     } & {
         id: string;
-        employeeId: string;
-        status: import("../generated/prisma/enums.js").AttendanceStatus;
-        createdAt: Date;
-        updatedAt: Date;
-        shiftId: string | null;
         shiftDate: Date;
         clockInAt: Date;
         clockOutAt: Date | null;
         grossMinutes: number | null;
         breakMinutes: number;
         netMinutes: number | null;
+        status: import("../generated/prisma/enums.js").AttendanceStatus;
+        createdAt: Date;
+        updatedAt: Date;
+        employeeId: string;
+        shiftId: string | null;
     })[]>;
+    getManagerDailyAttendance(req: AuthenticatedRequest, date: string): Promise<{
+        date: string;
+        timezone: string;
+        totalEmployees: number;
+        totalRecords: number;
+        currentlyWorking: number;
+        onBreak: number;
+        completed: number;
+        notClockedIn: number;
+        totalNetMinutes: number;
+        records: ({
+            sessionId: null;
+            employee: {
+                id: string;
+                employeeCode: string;
+                name: string;
+                email: string;
+                status: import("../generated/prisma/enums.js").RecordStatus;
+                team: {
+                    name: string;
+                } | null;
+            };
+            clockInAt: null;
+            clockOutAt: null;
+            status: string;
+            isCurrentlyWorking: boolean;
+            isOnBreak: boolean;
+            grossMinutes: number;
+            breakMinutes: number;
+            netMinutes: number;
+            breaks: never[];
+        } | {
+            sessionId: string;
+            employee: {
+                id: string;
+                employeeCode: string;
+                name: string;
+                email: string;
+                status: import("../generated/prisma/enums.js").RecordStatus;
+                team: {
+                    name: string;
+                } | null;
+            };
+            clockInAt: Date;
+            clockOutAt: Date | null;
+            status: string;
+            isCurrentlyWorking: boolean;
+            isOnBreak: boolean;
+            grossMinutes: number;
+            breakMinutes: number;
+            netMinutes: number;
+            breaks: {
+                id: string;
+                createdAt: Date;
+                startedAt: Date;
+                attendanceSessionId: string;
+                endedAt: Date | null;
+                breakType: import("../generated/prisma/enums.js").BreakType;
+            }[];
+        })[];
+    }>;
     getDailyAttendance(req: AuthenticatedRequest, date: string): Promise<{
         date: string;
         timezone: string;
@@ -87,14 +148,14 @@ export declare class AttendanceController {
         records: {
             sessionId: string;
             employee: {
+                id: string;
+                status: import("../generated/prisma/enums.js").RecordStatus;
+                email: string;
+                employeeCode: string;
+                name: string;
                 team: {
                     name: string;
                 } | null;
-                name: string;
-                email: string;
-                id: string;
-                status: import("../generated/prisma/enums.js").RecordStatus;
-                employeeCode: string;
             };
             clockInAt: Date;
             clockOutAt: Date | null;

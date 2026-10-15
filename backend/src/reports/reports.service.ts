@@ -276,10 +276,19 @@ type ReportFilters = {
   employeeId?: string;
 };
 
+
+type CorrectionCounts = {
+  pending: number;
+  approved: number;
+  rejected: number;
+};
+
+
 function parseMonth(month: string) {
   if (!/^\d{4}-\d{2}$/.test(month || "")) {
     throw new BadRequestException("month must use YYYY-MM format");
   }
+
 
   const [year, monthNumber] = month.split("-").map(Number);
 
@@ -378,6 +387,7 @@ export class ReportsService {
     return user;
   }
 
+
   async getMonthlyReport(
     userId: string,
     filters: ReportFilters,
@@ -421,6 +431,8 @@ export class ReportsService {
       monthNumber,
       1,
     );
+
+   
 
     const employeeWhere: any = {
       status: RecordStatus.ACTIVE,
@@ -481,6 +493,63 @@ export class ReportsService {
       },
     });
 
+    
+const employeeIds = employees.map((employee) => employee.id);
+
+const correctionRequests = employeeIds.length
+  ? await this.prisma.correctionRequest.findMany({
+      where: {
+        session: {
+          employeeId: { in: employeeIds },
+          clockInAt: {
+            gte: startUtc,
+            lt: endUtcExclusive,
+          },
+        },
+      },
+      select: {
+        status: true,
+        session: {
+          select: {
+            employeeId: true,
+          },
+        },
+      },
+    })
+  : [];
+
+const correctionCountsByEmployee = new Map<
+  string,
+  CorrectionCounts
+>();
+
+for (const employeeId of employeeIds) {
+  correctionCountsByEmployee.set(employeeId, {
+    pending: 0,
+    approved: 0,
+    rejected: 0,
+  });
+}
+
+for (const request of correctionRequests) {
+  const employeeId = request.session.employeeId;
+  const counts = correctionCountsByEmployee.get(employeeId);
+
+  if (!counts) continue;
+
+  switch (request.status) {
+    case "PENDING":
+      counts.pending++;
+      break;
+    case "APPROVED":
+      counts.approved++;
+      break;
+    case "REJECTED":
+      counts.rejected++;
+      break;
+  }
+}
+
     const workdays = listWeekdays(
       monthStartKey,
       effectiveEndKey,
@@ -506,6 +575,10 @@ export class ReportsService {
       let grossMinutes = 0;
       let breakMinutes = 0;
       let netMinutes = 0;
+      
+
+
+
 
       const daily = workdays.map((date) => {
         const sessions = sessionsByDate.get(date) ?? [];
@@ -629,6 +702,12 @@ export class ReportsService {
         grossMinutes,
         breakMinutes,
         netMinutes,
+         // Correction request counts
+  correctionCounts: correctionCountsByEmployee.get(employee.id) ?? {
+    pending: 0,
+    approved: 0,
+    rejected: 0,
+  },
         daily,
       };
     });

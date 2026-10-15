@@ -10,7 +10,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Request, UseGuards, } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, Request, UseGuards, Headers, } from "@nestjs/common";
 import { AuthService } from "./auth.service.js";
 import { LoginDto } from "./dto/login.dto.js";
 import { RegisterDto } from "./dto/register.dto.js";
@@ -22,8 +22,8 @@ let AuthController = class AuthController {
     constructor(authService) {
         this.authService = authService;
     }
-    register(dto) {
-        return this.authService.register(dto);
+    register(dto, setupKey) {
+        return this.authService.register(dto, setupKey);
     }
     login(dto) {
         return this.authService.login(dto);
@@ -34,12 +34,19 @@ let AuthController = class AuthController {
     adminTest() {
         return { message: "Admin access granted" };
     }
+    createAdmin(dto) {
+        return this.authService.createAdmin(dto);
+    }
+    createManager(dto) {
+        return this.authService.createManager(dto);
+    }
 };
 __decorate([
     Post("register"),
     __param(0, Body()),
+    __param(1, Headers("x-admin-setup-key")),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [RegisterDto]),
+    __metadata("design:paramtypes", [RegisterDto, String]),
     __metadata("design:returntype", void 0)
 ], AuthController.prototype, "register", null);
 __decorate([
@@ -66,6 +73,24 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)
 ], AuthController.prototype, "adminTest", null);
+__decorate([
+    Post("admins"),
+    UseGuards(JwtAuthGuard, RolesGuard),
+    Roles("ADMIN"),
+    __param(0, Body()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [RegisterDto]),
+    __metadata("design:returntype", void 0)
+], AuthController.prototype, "createAdmin", null);
+__decorate([
+    Post("managers"),
+    UseGuards(JwtAuthGuard, RolesGuard),
+    Roles("ADMIN"),
+    __param(0, Body()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [RegisterDto]),
+    __metadata("design:returntype", void 0)
+], AuthController.prototype, "createManager", null);
 AuthController = __decorate([
     Controller("auth"),
     __metadata("design:paramtypes", [AuthService])

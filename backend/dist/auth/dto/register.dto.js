@@ -7,14 +7,13 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
-import { IsEmail, IsEnum, IsNotEmpty, IsString, MinLength, IsOptional, IsUUID, } from "class-validator";
+import { IsEmail, IsEnum, IsNotEmpty, IsString, MinLength, } from "class-validator";
 import { Role } from "../../generated/prisma/client.js";
 export class RegisterDto {
     name;
     email;
     password;
     role;
-    employeeId;
 }
 __decorate([
     IsString(),
@@ -34,9 +33,4 @@ __decorate([
     IsEnum(Role),
     __metadata("design:type", String)
 ], RegisterDto.prototype, "role", void 0);
-__decorate([
-    IsOptional(),
-    IsUUID(),
-    __metadata("design:type", String)
-], RegisterDto.prototype, "employeeId", void 0);
 //# sourceMappingURL=register.dto.js.map

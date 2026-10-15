@@ -422,6 +422,73 @@ export class AuthService {
       tokenType: "Bearer",
     };
   }
+
+  async createManager(dto: RegisterDto) {
+  const email = dto.email.trim().toLowerCase();
+  const name = dto.name.trim();
+
+  if (!name) {
+    throw new BadRequestException("Name is required");
+  }
+
+  // Check whether the email already belongs to a user.
+  const existingUser = await this.prisma.user.findUnique({
+    where: { email },
+    select: { id: true },
+  });
+
+  if (existingUser) {
+    throw new ConflictException("Email is already registered");
+  }
+
+  // Also prevent duplicate employee records.
+  const existingEmployee = await this.prisma.employee.findFirst({
+    where: {
+      email: {
+        equals: email,
+        mode: "insensitive",
+      },
+    },
+    select: { id: true },
+  });
+
+  if (existingEmployee) {
+    throw new ConflictException(
+      "An employee with this email already exists",
+    );
+  }
+
+  const hashedPassword = await bcrypt.hash(dto.password, 12);
+
+  // Create the employee and manager account together.
+  return this.prisma.$transaction(async (tx) => {
+    const employee = await tx.employee.create({
+      data: {
+        employeeCode: `MGR-${randomUUID()}`,
+        name,
+        email,
+        status: RecordStatus.ACTIVE,
+      },
+    });
+
+    return tx.user.create({
+      data: {
+        email,
+        passwordHash: hashedPassword,
+        role: Role.MANAGER,
+        status: RecordStatus.ACTIVE,
+        employeeId: employee.id,
+      },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        employeeId: true,
+        createdAt: true,
+      },
+    });
+  });
+}
  
 async createAdmin(dto: RegisterDto) {
   const email = dto.email.trim().toLowerCase();

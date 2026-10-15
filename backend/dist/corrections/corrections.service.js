@@ -44,6 +44,14 @@ let CorrectionsService = class CorrectionsService {
         if (inDate && outDate && outDate <= inDate) {
             throw new BadRequestException("Proposed clock-out must be later than proposed clock-in");
         }
+        if (!proposedIn && !proposedOut) {
+            throw new BadRequestException("Provide at least one proposed clock-in or clock-out time");
+        }
+        const effectiveIn = inDate ?? session.clockInAt;
+        const effectiveOut = outDate ?? session.clockOutAt;
+        if (effectiveOut && effectiveOut <= effectiveIn) {
+            throw new BadRequestException("Proposed clock-out must be later than the effective clock-in");
+        }
         return this.prisma.correctionRequest.create({
             data: {
                 sessionId,
@@ -67,22 +75,94 @@ let CorrectionsService = class CorrectionsService {
         });
     }
     async getPendingRequests(userId) {
-        const reviewer = await this.prisma.user.findUnique({
-            where: { id: userId },
-            select: { role: true },
-        });
-        if (!reviewer ||
-            (reviewer.role !== Role.ADMIN &&
-                reviewer.role !== Role.MANAGER)) {
-            throw new ForbiddenException("Only managers and administrators can review corrections");
-        }
+        const reviewer = await this.getReviewer(userId);
+        const employeeFilter = reviewer.role === Role.ADMIN
+            ? {}
+            : reviewer.employeeId
+                ? {
+                    session: {
+                        employee: {
+                            managerId: reviewer.employeeId,
+                        },
+                    },
+                }
+                : { id: "__no_matching_request__" };
         return this.prisma.correctionRequest.findMany({
-            where: { status: CorrectionStatus.PENDING },
+            where: {
+                status: CorrectionStatus.PENDING,
+                ...employeeFilter,
+            },
             orderBy: { createdAt: "asc" },
             include: {
-                session: true,
+                session: {
+                    include: {
+                        employee: {
+                            select: {
+                                id: true,
+                                employeeCode: true,
+                                name: true,
+                                email: true,
+                                managerId: true,
+                                teamId: true,
+                            },
+                        },
+                        breaks: true,
+                    },
+                },
                 requestedBy: {
-                    select: { id: true, email: true, role: true },
+                    select: {
+                        id: true,
+                        email: true,
+                        role: true,
+                    },
+                },
+            },
+        });
+    }
+    async getAllRequests(userId) {
+        const reviewer = await this.getReviewer(userId);
+        const employeeFilter = reviewer.role === Role.ADMIN
+            ? {}
+            : reviewer.employeeId
+                ? {
+                    session: {
+                        employee: {
+                            managerId: reviewer.employeeId,
+                        },
+                    },
+                }
+                : { id: "__no_matching_request__" };
+        return this.prisma.correctionRequest.findMany({
+            where: employeeFilter,
+            orderBy: { createdAt: "desc" },
+            include: {
+                session: {
+                    include: {
+                        employee: {
+                            select: {
+                                id: true,
+                                employeeCode: true,
+                                name: true,
+                                email: true,
+                                managerId: true,
+                                teamId: true,
+                            },
+                        },
+                    },
+                },
+                requestedBy: {
+                    select: {
+                        id: true,
+                        email: true,
+                        role: true,
+                    },
+                },
+                reviewedBy: {
+                    select: {
+                        id: true,
+                        email: true,
+                        role: true,
+                    },
                 },
             },
         });
@@ -106,6 +186,9 @@ let CorrectionsService = class CorrectionsService {
         });
         if (!request) {
             throw new NotFoundException("Correction request not found");
+        }
+        if (request.requestedById === userId) {
+            throw new ForbiddenException("You cannot review your own correction request");
         }
         if (request.status !== CorrectionStatus.PENDING) {
             throw new BadRequestException("This correction request has already been reviewed");
@@ -207,6 +290,22 @@ let CorrectionsService = class CorrectionsService {
             });
             return updatedRequest;
         });
+    }
+    async getReviewer(userId) {
+        const reviewer = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+                id: true,
+                role: true,
+                employeeId: true,
+            },
+        });
+        if (!reviewer ||
+            (reviewer.role !== Role.ADMIN &&
+                reviewer.role !== Role.MANAGER)) {
+            throw new ForbiddenException("Only managers and administrators can review corrections");
+        }
+        return reviewer;
     }
 };
 CorrectionsService = __decorate([
