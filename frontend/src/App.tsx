@@ -1450,6 +1450,10 @@ import Register from "./components/Register";
 import AdminRegister from "./components/AdminRegister";
 import LandingPage from "./components/LandingPage";
 import ShiftManagement from "./components/ShiftManagement";
+import ManagerRegister from "./components/ManagerRegister";
+import EmployeeManagement from "./components/EmployeeManagement";
+import TeamManagement from "./components/TeamManagement";
+import ManagerDashboard from "./components/ManagerDashboard";
 
 type BreakRecord = {
   id: string;
@@ -1536,7 +1540,7 @@ type CorrectionRequest = {
   } | null;
 };
 
-type Page = "dashboard" | "history" | "corrections" | "reports" | "adminRegister" | "shifts";
+type Page = "dashboard" | "history" | "corrections" | "reports" | "adminRegister" | "shifts" |"managerRegister" | "employees" |"teams";
 type RequestStatus = "PENDING" | "APPROVED" | "REJECTED";
 
 function getSriLankaToday() {
@@ -1690,6 +1694,15 @@ function App() {
   );
   const [currentPage, setCurrentPage] = useState<Page>("dashboard");
   const [attendance, setAttendance] = useState<AttendanceSession[]>([]);
+  
+const [historyFromDate, setHistoryFromDate] = useState("");
+const [historyToDate, setHistoryToDate] = useState("");
+const [historyStatus, setHistoryStatus] = useState("ALL");
+const [historySort, setHistorySort] = useState("NEWEST");
+const [historyPage, setHistoryPage] = useState(1);
+const [historyPageSize, setHistoryPageSize] = useState(10);
+const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
+
   const [assignedShift, setAssignedShift] =
   useState<AssignedShift | null>(null);
 
@@ -1726,8 +1739,15 @@ const [showLanding, setShowLanding] = useState(true);
   const [proposedOut, setProposedOut] = useState("");
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
 
-  const role = getRoleFromToken(token);
-  const canReview = role === "ADMIN" || role === "MANAGER";
+ 
+const role = getRoleFromToken(token);
+
+const isAdmin = role === "ADMIN";
+const isManager = role === "MANAGER";
+const isEmployee = role === "EMPLOYEE";
+
+const canReview = isAdmin || isManager;
+
 
   const loadAttendance = useCallback(async () => {
     setLoading(true);
@@ -1747,6 +1767,50 @@ const [showLanding, setShowLanding] = useState(true);
       setLoading(false);
     }
   }, []);
+
+  
+const filteredHistory = attendance
+  .filter((session) => {
+    // Filter by date using Sri Lanka local dates.
+    const sessionDate = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Colombo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    })
+      .formatToParts(new Date(session.clockInAt))
+      .filter((part) => part.type !== "literal")
+      .reduce((values, part) => {
+        values[part.type] = part.value;
+        return values;
+      }, {} as Record<string, string>);
+
+    const date = `${sessionDate.year}-${sessionDate.month}-${sessionDate.day}`;
+
+    const matchesFrom = !historyFromDate || date >= historyFromDate;
+    const matchesTo = !historyToDate || date <= historyToDate;
+    const matchesStatus =
+      historyStatus === "ALL" || session.status === historyStatus;
+
+    return matchesFrom && matchesTo && matchesStatus;
+  })
+  .sort((a, b) => {
+    const difference =
+      new Date(a.clockInAt).getTime() -
+      new Date(b.clockInAt).getTime();
+
+    return historySort === "NEWEST" ? -difference : difference;
+  });
+
+const historyTotalPages = Math.max(
+  1,
+  Math.ceil(filteredHistory.length / historyPageSize),
+);
+
+const paginatedHistory = filteredHistory.slice(
+  (historyPage - 1) * historyPageSize,
+  historyPage * historyPageSize,
+);
 
   const loadMyShift = useCallback(async () => {
   setShiftLoading(true);
@@ -1768,32 +1832,69 @@ const [showLanding, setShowLanding] = useState(true);
   }
 }, []);
 
-  const loadAdminDailyAttendance = useCallback(
-    async (date: string) => {
-      if (!canReview || !date) return;
-      setAdminReportLoading(true);
-      setAdminReportError("");
-      try {
-        const response = await api.get<AdminDailyAttendance>(
-          "/attendance/admin/daily",
-          { params: { date } },
-        );
-        setAdminReport(response.data);
-      } catch (err: unknown) {
-        console.error("Failed to load company daily attendance:", err);
-        setAdminReportError(
-          getErrorMessage(
-            err,
-            "Could not load company attendance. Check that the backend endpoint is configured.",
-          ),
-        );
-        setAdminReport(null);
-      } finally {
-        setAdminReportLoading(false);
-      }
-    },
-    [canReview],
-  );
+  // const loadAdminDailyAttendance = useCallback(
+  //   async (date: string) => {
+  //     if (!canReview || !date) return;
+  //     setAdminReportLoading(true);
+  //     setAdminReportError("");
+  //     try {
+  //       const response = await api.get<AdminDailyAttendance>(
+  //         "/attendance/admin/daily",
+  //         { params: { date } },
+  //       );
+  //       setAdminReport(response.data);
+  //     } catch (err: unknown) {
+  //       console.error("Failed to load company daily attendance:", err);
+  //       setAdminReportError(
+  //         getErrorMessage(
+  //           err,
+  //           "Could not load company attendance. Check that the backend endpoint is configured.",
+  //         ),
+  //       );
+  //       setAdminReport(null);
+  //     } finally {
+  //       setAdminReportLoading(false);
+  //     }
+  //   },
+  //   [canReview],
+  // );
+
+  
+const loadAdminDailyAttendance = useCallback(
+  async (date: string) => {
+    if (!canReview || !date) return;
+
+    setAdminReportLoading(true);
+    setAdminReportError("");
+
+    try {
+      const endpoint = isAdmin
+        ? "/attendance/admin/daily"
+        : "/attendance/manager/daily";
+
+      const response = await api.get<AdminDailyAttendance>(
+        endpoint,
+        { params: { date } },
+      );
+
+      setAdminReport(response.data);
+    } catch (err: unknown) {
+      console.error("Failed to load daily attendance:", err);
+
+      setAdminReportError(
+        getErrorMessage(
+          err,
+          "Could not load attendance. Please try again.",
+        ),
+      );
+
+      setAdminReport(null);
+    } finally {
+      setAdminReportLoading(false);
+    }
+  },
+  [canReview, isAdmin],
+);
 
   const loadMyRequests = useCallback(async () => {
     try {
@@ -2288,171 +2389,453 @@ setShiftLoading(false);
     );
   }
 
-  function renderAdminDashboard() {
-    const report = adminReport;
-    const totalGrossMinutes =
-      report?.records.reduce((sum, record) => sum + record.grossMinutes, 0) ?? 0;
-    const totalBreakMinutes =
-      report?.records.reduce((sum, record) => sum + record.breakMinutes, 0) ?? 0;
-    const totalNetMinutes =
-      report?.records.reduce((sum, record) => sum + record.netMinutes, 0) ?? 0;
+//   function renderAdminDashboard() {
+//     const report = adminReport;
+//     const totalGrossMinutes =
+//       report?.records.reduce((sum, record) => sum + record.grossMinutes, 0) ?? 0;
+//     const totalBreakMinutes =
+//       report?.records.reduce((sum, record) => sum + record.breakMinutes, 0) ?? 0;
+//     const totalNetMinutes =
+//       report?.records.reduce((sum, record) => sum + record.netMinutes, 0) ?? 0;
 
-    return (
-      <>
-        <section className="welcome">
+//     return (
+//       <>
+//         <section className="welcome">
+//           <div>
+//            <p>
+//   {isAdmin ? "ADMINISTRATION WORKSPACE" : "MANAGER WORKSPACE"}
+// </p>
+
+// <h2>
+//   {isAdmin
+//     ? "Company Attendance Overview"
+//     : "Team Attendance Overview"}
+// </h2>
+
+// <span>
+//   {isAdmin
+//     ? "Review company-wide attendance, breaks, and working hours."
+//     : "Review attendance, breaks, and working hours for your assigned team."}
+// </span>
+//           </div>
+//           <div className="date">
+//             {new Intl.DateTimeFormat("en-LK", {
+//               timeZone: "Asia/Colombo",
+//               day: "2-digit",
+//               month: "short",
+//               year: "numeric",
+//             }).format(new Date(`${adminDate}T12:00:00+05:30`))}
+//           </div>
+//         </section>
+
+//         <section className="panel">
+//           <div className="admin-report-toolbar">
+//             <div>
+//               <h2>Daily Employee Attendance</h2>
+//               <p className="muted">
+//                 Select today or a previous date to view employee records.
+//               </p>
+//             </div>
+//             <div className="form-group admin-date-field">
+//               <label htmlFor="admin-attendance-date">Attendance date</label>
+//               <input
+//                 id="admin-attendance-date"
+//                 type="date"
+//                 value={adminDate}
+//                 max={today}
+//                 onChange={(event) => setAdminDate(event.target.value)}
+//               />
+//             </div>
+//             <button
+//               type="button"
+//               disabled={adminReportLoading}
+//               onClick={() => void loadAdminDailyAttendance(adminDate)}
+//             >
+//               {adminReportLoading ? "Loading..." : "Refresh"}
+//             </button>
+//           </div>
+
+//           {adminReportError && (
+//             <p className="notice" role="alert">{adminReportError}</p>
+//           )}
+
+//           <section className="stats admin-report-stats">
+//             <article className="stat-card">
+//               <span>Employees With Records</span>
+//               <h2>{report?.totalRecords ?? 0}</h2>
+//             </article>
+//             <article className="stat-card">
+//               <span>Currently Working</span>
+//               <h2>{report?.currentlyWorking ?? 0}</h2>
+//             </article>
+//             <article className="stat-card">
+//               <span>Clocked Out</span>
+//               <h2>{report?.completed ?? 0}</h2>
+//             </article>
+//             <article className="stat-card">
+//               <span>Total Net Working Time</span>
+//               <h2>{formatDuration(totalNetMinutes)}</h2>
+//             </article>
+//           </section>
+
+//           {adminReportLoading && !report ? (
+//             <p className="muted">Loading attendance records...</p>
+//           ) : !report || report.records.length === 0 ? (
+//             <div className="empty-state">
+//               <div className="empty-icon">◷</div>
+//               <strong>No attendance records for {adminDate}</strong>
+//               <p>
+//                 Choose another date to view records. Employees without a
+//                 clock-in record are not included in this table.
+//               </p>
+//             </div>
+//           ) : (
+//             <>
+//               <div className="attendance-table-wrapper">
+//                 <table className="attendance-table">
+//                   <thead>
+//                     <tr>
+//                       <th>Employee Code</th>
+//                       <th>Employee Name</th>
+//                       <th>Email</th>
+//                       <th>Team</th>
+//                       <th>Clock In</th>
+//                       <th>Clock Out</th>
+//                       <th>Gross Time</th>
+//                       <th>Break Time</th>
+//                       <th>Net Working Time</th>
+//                       <th>Status</th>
+//                     </tr>
+//                   </thead>
+//                   <tbody>
+//                     {report.records.map((record) => (
+//                       <tr key={record.sessionId}>
+//                         <td>{record.employee.employeeCode}</td>
+//                         <td>
+//                           <strong>{record.employee.name}</strong>
+//                         </td>
+//                         <td>{record.employee.email}</td>
+//                         <td>{record.employee.team?.name ?? "Unassigned"}</td>
+//                         <td>{formatSriLankaTime(record.clockInAt)}</td>
+//                         <td>{formatSriLankaTime(record.clockOutAt)}</td>
+//                         <td>{formatDuration(record.grossMinutes)}</td>
+//                         <td>{formatDuration(record.breakMinutes)}</td>
+//                         <td>
+//                           <strong>{formatDuration(record.netMinutes)}</strong>
+//                         </td>
+//                         <td>
+//                           {/* <span
+//                             className={`status-badge ${
+//                               record.isCurrentlyWorking
+//                                 ? "status-pending"
+//                                 : `status-${record.status.toLowerCase()}`
+//                             }`}
+//                           >
+//                             {record.isCurrentlyWorking
+//                               ? "Working"
+//                               : record.status === "COMPLETED"
+//                                 ? "Completed"
+//                                 : record.status}
+//                           </span> */}
+                          
+//                         </td>
+//                       </tr>
+//                     ))}
+//                   </tbody>
+//                   <tfoot>
+//                     <tr>
+//                       <th colSpan={6}>Daily totals</th>
+//                       <th>{formatDuration(totalGrossMinutes)}</th>
+//                       <th>{formatDuration(totalBreakMinutes)}</th>
+//                       <th>{formatDuration(totalNetMinutes)}</th>
+//                       <th />
+//                     </tr>
+//                   </tfoot>
+//                 </table>
+//               </div>
+//               <p className="muted admin-report-footnote">
+//                 Times are shown in Sri Lanka time. Gross time is elapsed time
+//                 from clock-in to clock-out (or now for an active session).
+//                 Break time includes unpaid breaks only. Net time is gross time
+//                 minus unpaid breaks.
+//               </p>
+//             </>
+//           )}
+//         </section>
+//       </>
+//     );
+//   }
+
+
+function renderAdminDashboard() {
+  const report = adminReport;
+
+  const totalGrossMinutes =
+    report?.records.reduce(
+      (sum, record) => sum + (record.grossMinutes ?? 0),
+      0,
+    ) ?? 0;
+
+  const totalBreakMinutes =
+    report?.records.reduce(
+      (sum, record) => sum + (record.breakMinutes ?? 0),
+      0,
+    ) ?? 0;
+
+  const totalNetMinutes =
+    report?.records.reduce(
+      (sum, record) => sum + (record.netMinutes ?? 0),
+      0,
+    ) ?? 0;
+
+  const getAttendanceStatus = (record: AdminAttendanceRecord) => {
+    const isOnBreak = record.breaks?.some(
+      (item) => item.endedAt === null,
+    ) ?? false;
+
+    if (record.isCurrentlyWorking) {
+      return isOnBreak ? "On Break" : "Working";
+    }
+
+    if (record.status === "COMPLETED") {
+      return "Completed";
+    }
+
+    return "Incomplete";
+  };
+
+  const getStatusClass = (status: string) => {
+    switch (status) {
+      case "Working":
+        return "status-badge status-approved";
+      case "On Break":
+        return "status-badge status-pending";
+      case "Completed":
+        return "status-badge status-approved";
+      default:
+        return "status-badge status-rejected";
+    }
+  };
+
+  return (
+    <>
+      <section className="welcome">
+        <div>
+          <p>ADMINISTRATION WORKSPACE</p>
+          <h2>Company Attendance Overview</h2>
+          <span>
+            Review company-wide attendance, breaks, and working hours.
+          </span>
+        </div>
+
+        <div className="date">
+          {new Intl.DateTimeFormat("en-LK", {
+            timeZone: "Asia/Colombo",
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+          }).format(new Date(`${adminDate}T12:00:00+05:30`))}
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="admin-report-toolbar">
           <div>
-            <p>ADMINISTRATION WORKSPACE</p>
-            <h2>Company Attendance Overview</h2>
-            <span>
-              Review each employee's daily attendance, breaks, and working hours.
-            </span>
-          </div>
-          <div className="date">
-            {new Intl.DateTimeFormat("en-LK", {
-              timeZone: "Asia/Colombo",
-              day: "2-digit",
-              month: "short",
-              year: "numeric",
-            }).format(new Date(`${adminDate}T12:00:00+05:30`))}
-          </div>
-        </section>
-
-        <section className="panel">
-          <div className="admin-report-toolbar">
-            <div>
-              <h2>Daily Employee Attendance</h2>
-              <p className="muted">
-                Select today or a previous date to view employee records.
-              </p>
-            </div>
-            <div className="form-group admin-date-field">
-              <label htmlFor="admin-attendance-date">Attendance date</label>
-              <input
-                id="admin-attendance-date"
-                type="date"
-                value={adminDate}
-                max={today}
-                onChange={(event) => setAdminDate(event.target.value)}
-              />
-            </div>
-            <button
-              type="button"
-              disabled={adminReportLoading}
-              onClick={() => void loadAdminDailyAttendance(adminDate)}
-            >
-              {adminReportLoading ? "Loading..." : "Refresh"}
-            </button>
+            <h2>Daily Employee Attendance</h2>
+            <p className="muted">
+              Select today or a previous date to view employee records.
+            </p>
           </div>
 
-          {adminReportError && (
-            <p className="notice" role="alert">{adminReportError}</p>
-          )}
+          <div className="form-group admin-date-field">
+            <label htmlFor="admin-attendance-date">
+              Attendance date
+            </label>
+            <input
+              id="admin-attendance-date"
+              type="date"
+              value={adminDate}
+              max={today}
+              onChange={(event) => setAdminDate(event.target.value)}
+            />
+          </div>
 
-          <section className="stats admin-report-stats">
-            <article className="stat-card">
-              <span>Employees With Records</span>
-              <h2>{report?.totalRecords ?? 0}</h2>
-            </article>
-            <article className="stat-card">
-              <span>Currently Working</span>
-              <h2>{report?.currentlyWorking ?? 0}</h2>
-            </article>
-            <article className="stat-card">
-              <span>Clocked Out</span>
-              <h2>{report?.completed ?? 0}</h2>
-            </article>
-            <article className="stat-card">
-              <span>Total Net Working Time</span>
-              <h2>{formatDuration(totalNetMinutes)}</h2>
-            </article>
-          </section>
+          <button
+            type="button"
+            disabled={adminReportLoading}
+            onClick={() => void loadAdminDailyAttendance(adminDate)}
+          >
+            {adminReportLoading ? "Loading..." : "Refresh"}
+          </button>
+        </div>
 
-          {adminReportLoading && !report ? (
-            <p className="muted">Loading attendance records...</p>
-          ) : !report || report.records.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-icon">◷</div>
-              <strong>No attendance records for {adminDate}</strong>
-              <p>
-                Choose another date to view records. Employees without a
-                clock-in record are not included in this table.
-              </p>
-            </div>
-          ) : (
-            <>
-              <div className="attendance-table-wrapper">
-                <table className="attendance-table">
-                  <thead>
-                    <tr>
-                      <th>Employee Code</th>
-                      <th>Employee Name</th>
-                      <th>Email</th>
-                      <th>Team</th>
-                      <th>Clock In</th>
-                      <th>Clock Out</th>
-                      <th>Gross Time</th>
-                      <th>Break Time</th>
-                      <th>Net Working Time</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report.records.map((record) => (
-                      <tr key={record.sessionId}>
-                        <td>{record.employee.employeeCode}</td>
-                        <td>
-                          <strong>{record.employee.name}</strong>
-                        </td>
-                        <td>{record.employee.email}</td>
-                        <td>{record.employee.team?.name ?? "Unassigned"}</td>
-                        <td>{formatSriLankaTime(record.clockInAt)}</td>
-                        <td>{formatSriLankaTime(record.clockOutAt)}</td>
-                        <td>{formatDuration(record.grossMinutes)}</td>
-                        <td>{formatDuration(record.breakMinutes)}</td>
-                        <td>
-                          <strong>{formatDuration(record.netMinutes)}</strong>
-                        </td>
-                        <td>
-                          <span
-                            className={`status-badge ${
-                              record.isCurrentlyWorking
-                                ? "status-pending"
-                                : `status-${record.status.toLowerCase()}`
-                            }`}
-                          >
-                            {record.isCurrentlyWorking
-                              ? "Working"
-                              : record.status === "COMPLETED"
-                                ? "Completed"
-                                : record.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr>
-                      <th colSpan={6}>Daily totals</th>
-                      <th>{formatDuration(totalGrossMinutes)}</th>
-                      <th>{formatDuration(totalBreakMinutes)}</th>
-                      <th>{formatDuration(totalNetMinutes)}</th>
-                      <th />
-                    </tr>
-                  </tfoot>
-                </table>
+        {adminReportError && (
+          <p className="notice" role="alert">
+            {adminReportError}
+          </p>
+        )}
+
+        {adminReportLoading && !report ? (
+          <p className="muted">Loading attendance records...</p>
+        ) : (
+          <>
+            <section className="stats admin-report-stats">
+              <article className="stat-card">
+                <span>Employees With Records</span>
+                <h2>{report?.totalRecords ?? 0}</h2>
+              </article>
+
+              <article className="stat-card">
+                <span>Currently Working</span>
+                <h2>{report?.currentlyWorking ?? 0}</h2>
+              </article>
+
+              <article className="stat-card">
+                <span>Clocked Out</span>
+                <h2>{report?.completed ?? 0}</h2>
+              </article>
+
+              <article className="stat-card">
+                <span>Total Net Working Time</span>
+                <h2>{formatDuration(totalNetMinutes)}</h2>
+              </article>
+            </section>
+
+            <section className="stats admin-report-stats">
+              <article className="stat-card">
+                <span>Total Gross Working Time</span>
+                <h2>{formatDuration(totalGrossMinutes)}</h2>
+              </article>
+
+              <article className="stat-card">
+                <span>Total Unpaid Break Time</span>
+                <h2>{formatDuration(totalBreakMinutes)}</h2>
+              </article>
+
+              <article className="stat-card">
+                <span>Total Net Working Time</span>
+                <h2>{formatDuration(totalNetMinutes)}</h2>
+              </article>
+
+              <article className="stat-card">
+                <span>On Break</span>
+                <h2>
+                  {report?.records.filter(
+                    (record) =>
+                      record.isCurrentlyWorking &&
+                      record.breaks?.some(
+                        (item) => item.endedAt === null,
+                      ),
+                  ).length ?? 0}
+                </h2>
+              </article>
+            </section>
+
+            {!report || report.records.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-icon">◷</div>
+                <strong>No attendance records for {adminDate}</strong>
+                <p>
+                  Choose another date to view attendance records.
+                  Employees without an attendance session are not included
+                  in this report.
+                </p>
               </div>
-              <p className="muted admin-report-footnote">
-                Times are shown in Sri Lanka time. Gross time is elapsed time
-                from clock-in to clock-out (or now for an active session).
-                Break time includes unpaid breaks only. Net time is gross time
-                minus unpaid breaks.
-              </p>
-            </>
-          )}
-        </section>
-      </>
-    );
-  }
+            ) : (
+              <>
+                <div className="attendance-table-wrapper">
+                  <table className="attendance-table">
+                    <thead>
+                      <tr>
+                        <th>Employee Code</th>
+                        <th>Employee Name</th>
+                        <th>Email</th>
+                        <th>Team</th>
+                        <th>Clock In</th>
+                        <th>Clock Out</th>
+                        <th>Gross Time</th>
+                        <th>Break Time</th>
+                        <th>Net Working Time</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {report.records.map((record) => {
+                        const status = getAttendanceStatus(record);
+
+                        return (
+                          <tr key={record.sessionId}>
+                            <td>{record.employee.employeeCode}</td>
+
+                            <td>
+                              <strong>{record.employee.name}</strong>
+                            </td>
+
+                            <td>{record.employee.email}</td>
+
+                            <td>
+                              {record.employee.team?.name ?? "Unassigned"}
+                            </td>
+
+                            <td>
+                              {formatSriLankaTime(record.clockInAt)}
+                            </td>
+
+                            <td>
+                              {formatSriLankaTime(record.clockOutAt)}
+                            </td>
+
+                            <td>
+                              {formatDuration(record.grossMinutes)}
+                            </td>
+
+                            <td>
+                              {formatDuration(record.breakMinutes)}
+                            </td>
+
+                            <td>
+                              <strong>
+                                {formatDuration(record.netMinutes)}
+                              </strong>
+                            </td>
+
+                            <td>
+                              <span className={getStatusClass(status)}>
+                                {status}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+
+                    <tfoot>
+                      <tr>
+                        <th colSpan={6}>Daily totals</th>
+                        <th>{formatDuration(totalGrossMinutes)}</th>
+                        <th>{formatDuration(totalBreakMinutes)}</th>
+                        <th>{formatDuration(totalNetMinutes)}</th>
+                        <th />
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+
+                <p className="muted admin-report-footnote">
+                  Times are displayed in Sri Lanka time. Gross time is
+                  elapsed time from clock-in to clock-out, or now for an
+                  active session. Break time includes unpaid breaks only.
+                  Net time is gross time minus unpaid breaks.
+                </p>
+              </>
+            )}
+          </>
+        )}
+      </section>
+    </>
+  );
+}
 
   return (
     <div className="app">
@@ -2502,12 +2885,57 @@ setShiftLoading(false);
           >
             Reports
           </a>
-          {role === "ADMIN" && (
+          {/* {role === "ADMIN" && (
   <button onClick={() => goToPage("adminRegister")}>
     Register Admin
   </button>
-)}
+)} */}
 
+{isAdmin && (
+  <>
+    <a
+      href="#adminRegister"
+      className={currentPage === "adminRegister" ? "active" : ""}
+      onClick={(event) => {
+        event.preventDefault();
+        goToPage("adminRegister");
+      }}
+    >
+      Register Admin
+    </a>
+{isAdmin && (
+  <a
+    href="#employees"
+    className={currentPage === "employees" ? "active" : ""}
+    onClick={(event) => {
+      event.preventDefault();
+      goToPage("employees");
+    }}
+  >
+    Employee Management
+  </a>
+)}
+    <a
+      href="#managerRegister"
+      className={currentPage === "managerRegister" ? "active" : ""}
+      onClick={(event) => {
+        event.preventDefault();
+        goToPage("managerRegister");
+      }}
+    >
+      Register Manager
+    </a>
+  </>
+)}
+{isAdmin && (
+  <button
+    type="button"
+    onClick={() => goToPage("teams")}
+    className={currentPage === "teams" ? "active" : ""}
+  >
+    Team Management
+  </button>
+)}
 {role === "ADMIN" && (
   <a
     href="#shifts"
@@ -2545,21 +2973,32 @@ setShiftLoading(false);
         <header className="topbar">
           <div>
             <p className="eyebrow">
-              {canReview ? "ADMINISTRATION WORKSPACE" : "EMPLOYEE WORKSPACE"}
+             {isAdmin
+  ? "ADMINISTRATION WORKSPACE"
+  : isManager
+    ? "MANAGER WORKSPACE"
+    : "EMPLOYEE WORKSPACE"}
             </p>
             <h1>
-              {currentPage === "dashboard" &&
-                (canReview ? "Admin Attendance Dashboard" : "Attendance Dashboard")}
+             {currentPage === "dashboard" &&
+  (isAdmin
+    ? "Admin Attendance Dashboard"
+    : isManager
+      ? "Manager Attendance Dashboard"
+      : "Attendance Dashboard")}
               {currentPage === "history" && "Attendance History"}
               {currentPage === "corrections" &&
                 (canReview ? "Correction Management" : "Correction Requests")}
               {currentPage === "reports" && "Attendance Reports"}
+              {currentPage === "employees" && "Employee Management"}
               {/* {currentPage === "adminRegister" && role === "ADMIN" && (
   <AdminRegister
     onBack={() => goToPage("dashboard")}
   />
 )} */}
+
  {currentPage === "adminRegister" && "Register Administrator"}
+ {currentPage === "managerRegister" && "Register Manager"}
             </h1>
           </div>
           <div className="profile">
@@ -2596,12 +3035,21 @@ setShiftLoading(false);
     onBack={() => goToPage("dashboard")}
   />
 )}
+{currentPage === "teams" && isAdmin && <TeamManagement />}
+
+{currentPage === "employees" && isAdmin && (
+  <EmployeeManagement />
+)}
+{currentPage === "managerRegister" && isAdmin && (
+  <ManagerRegister onBack={() => goToPage("dashboard")} />
+)}
 {currentPage === "shifts" && role === "ADMIN" && (
   <ShiftManagement />
 )}
-
-        {currentPage === "dashboard" && (
-          canReview ? (
+{currentPage === "dashboard" && (
+  isManager ? (
+    <ManagerDashboard />
+  ) : isAdmin ? (
             renderAdminDashboard()
           ) : (
             <>
@@ -2873,7 +3321,7 @@ setShiftLoading(false);
           )
         )}
 
-        {currentPage === "history" && !canReview && (
+        {/* {currentPage === "history" && !canReview && (
           <section className="panel history-panel">
             <h2>Attendance History</h2>
             <p className="muted">
@@ -2933,7 +3381,321 @@ setShiftLoading(false);
               {loading ? "Refreshing..." : "Refresh History"}
             </button>
           </section>
-        )}
+        )} */}
+
+        
+{currentPage === "history" && !canReview && (
+  <section className="panel history-panel">
+    <h2>Attendance History</h2>
+    <p className="muted">
+      Review your attendance sessions and recorded break timelines.
+      All times are displayed in Sri Lanka time.
+    </p>
+
+    {/* Filters */}
+    <div className="admin-report-toolbar">
+      <div className="form-group">
+        <label htmlFor="history-from">From date</label>
+        <input
+          id="history-from"
+          type="date"
+          value={historyFromDate}
+          max={historyToDate || undefined}
+          onChange={(event) => {
+            setHistoryFromDate(event.target.value);
+            setHistoryPage(1);
+          }}
+        />
+      </div>
+
+      <div className="form-group">
+        <label htmlFor="history-to">To date</label>
+        <input
+          id="history-to"
+          type="date"
+          value={historyToDate}
+          min={historyFromDate || undefined}
+          onChange={(event) => {
+            setHistoryToDate(event.target.value);
+            setHistoryPage(1);
+          }}
+        />
+      </div>
+
+      <div className="form-group">
+        <label htmlFor="history-status">Session status</label>
+        <select
+          id="history-status"
+          value={historyStatus}
+          onChange={(event) => {
+            setHistoryStatus(event.target.value);
+            setHistoryPage(1);
+          }}
+        >
+          <option value="ALL">All sessions</option>
+          <option value="COMPLETED">Completed</option>
+          <option value="IN_PROGRESS">In progress</option>
+          <option value="INCOMPLETE">Incomplete</option>
+        </select>
+      </div>
+
+      <div className="form-group">
+        <label htmlFor="history-sort">Sort by date</label>
+        <select
+          id="history-sort"
+          value={historySort}
+          onChange={(event) => {
+            setHistorySort(event.target.value);
+            setHistoryPage(1);
+          }}
+        >
+          <option value="NEWEST">Newest first</option>
+          <option value="OLDEST">Oldest first</option>
+        </select>
+      </div>
+
+      <div className="form-group">
+        <label htmlFor="history-page-size">Records per page</label>
+        <select
+          id="history-page-size"
+          value={historyPageSize}
+          onChange={(event) => {
+            setHistoryPageSize(Number(event.target.value));
+            setHistoryPage(1);
+          }}
+        >
+          <option value={5}>5</option>
+          <option value={10}>10</option>
+          <option value={20}>20</option>
+          <option value={50}>50</option>
+        </select>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => {
+          setHistoryFromDate("");
+          setHistoryToDate("");
+          setHistoryStatus("ALL");
+          setHistorySort("NEWEST");
+          setHistoryPage(1);
+        }}
+      >
+        Clear filters
+      </button>
+    </div>
+
+    {loading ? (
+      <p className="muted">Loading attendance records...</p>
+    ) : filteredHistory.length === 0 ? (
+      <div className="empty-state">
+        <strong>No attendance records found</strong>
+        <p>Try changing your dates or status filter.</p>
+      </div>
+    ) : (
+      <>
+        <p className="muted">
+          Showing {((historyPage - 1) * historyPageSize) + 1}–
+          {Math.min(historyPage * historyPageSize, filteredHistory.length)}
+          {" "}of {filteredHistory.length} sessions
+        </p>
+
+        <div className="attendance-table-wrapper">
+          <table className="attendance-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Clock in</th>
+                <th>Clock out</th>
+                <th>Gross time</th>
+                <th>Break time</th>
+                <th>Net time</th>
+                <th>Status</th>
+                <th>Details</th>
+                <th>Correction</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {paginatedHistory.map((session) => {
+                const incomplete =
+                  session.status === "INCOMPLETE" ||
+                  (session.status === "COMPLETED" &&
+                    session.clockOutAt === null);
+
+                return (
+                  <>
+                    <tr key={session.id}>
+                      <td>{formatSriLankaDate(session.clockInAt)}</td>
+
+                      <td>{formatSriLankaTime(session.clockInAt)}</td>
+
+                      <td>
+                        {session.clockOutAt
+                          ? formatSriLankaTime(session.clockOutAt)
+                          : "Not recorded"}
+                      </td>
+
+                      <td>{formatDuration(session.grossMinutes)}</td>
+
+                      <td>{formatDuration(session.breakMinutes)}</td>
+
+                      <td>{formatDuration(session.netMinutes)}</td>
+
+                      <td>
+                        <span
+                          className={`status-badge ${
+                            incomplete
+                              ? "status-rejected"
+                              : session.status === "IN_PROGRESS"
+                                ? "status-pending"
+                                : "status-approved"
+                          }`}
+                        >
+                          {incomplete
+                            ? "Incomplete"
+                            : session.status === "IN_PROGRESS"
+                              ? "In progress"
+                              : "Completed"}
+                        </span>
+                      </td>
+
+                      <td>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setExpandedSessionId(
+                              expandedSessionId === session.id
+                                ? null
+                                : session.id,
+                            )
+                          }
+                        >
+                          {expandedSessionId === session.id
+                            ? "Hide timeline"
+                            : "View timeline"}
+                        </button>
+                      </td>
+
+                      <td>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedSessionId(session.id);
+                            setCorrectionReason("");
+                            setProposedIn("");
+                            setProposedOut("");
+                            goToPage("corrections");
+                          }}
+                        >
+                          Request
+                        </button>
+                      </td>
+                    </tr>
+
+                    {expandedSessionId === session.id && (
+                      <tr key={`${session.id}-timeline`}>
+                        <td colSpan={9}>
+                          <div className="panel">
+                            <h3>Session timeline</h3>
+
+                            <div className="schedule-row">
+                              <span>Clock in</span>
+                              <strong>
+                                {formatSriLankaDate(session.clockInAt)}{" "}
+                                {formatSriLankaTime(session.clockInAt)}
+                              </strong>
+                            </div>
+
+                            {session.breaks?.map((item) => (
+                              <div
+                                className="schedule-row"
+                                key={item.id}
+                              >
+                                <span>
+                                  {item.breakType} break — Start
+                                </span>
+                                <strong>
+                                  {formatSriLankaTime(item.startedAt)}
+                                </strong>
+
+                                <span>Break end</span>
+                                <strong>
+                                  {item.endedAt
+                                    ? formatSriLankaTime(item.endedAt)
+                                    : "Not recorded — break may still be open"}
+                                </strong>
+                              </div>
+                            ))}
+
+                            <div className="schedule-row">
+                              <span>Clock out</span>
+                              <strong>
+                                {session.clockOutAt
+                                  ? `${formatSriLankaDate(session.clockOutAt)} ${formatSriLankaTime(session.clockOutAt)}`
+                                  : "Not recorded"}
+                              </strong>
+                            </div>
+
+                            {!session.clockOutAt && (
+                              <p className="notice" role="status">
+                                {session.status === "IN_PROGRESS"
+                                  ? "This session is still open. No clock-out time has been recorded."
+                                  : "Incomplete session: the clock-out time is missing. A correction may be required."}
+                              </p>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination */}
+        <div className="section-heading">
+          <button
+            type="button"
+            disabled={historyPage <= 1}
+            onClick={() =>
+              setHistoryPage((page) => Math.max(1, page - 1))
+            }
+          >
+            Previous
+          </button>
+
+          <span>
+            Page {historyPage} of {historyTotalPages}
+          </span>
+
+          <button
+            type="button"
+            disabled={historyPage >= historyTotalPages}
+            onClick={() =>
+              setHistoryPage((page) =>
+                Math.min(historyTotalPages, page + 1),
+              )
+            }
+          >
+            Next
+          </button>
+        </div>
+      </>
+    )}
+
+    <button
+      type="button"
+      onClick={() => void loadAttendance()}
+      disabled={loading}
+    >
+      {loading ? "Refreshing..." : "Refresh history"}
+    </button>
+  </section>
+)}
+
 
         {currentPage === "corrections" && (
           <>
